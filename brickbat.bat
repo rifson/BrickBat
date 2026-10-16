@@ -33,6 +33,16 @@ rem              in analytics.dev.secrets or analytics_dev. To find a scope in t
 rem              other environments, that word is swapped for each of these.
 set "ENV_WORDS=dev test tst qa uat stg stage staging preprod prod prd"
 
+rem ---- the workspace comes from the profile only -------------------------------
+rem  brickbat picks the workspace with -p. The CLI lets DATABRICKS_HOST, DATABRICKS_TOKEN
+rem  and the like set in Windows win over -p, so changes would go to that workspace
+rem  instead of the one shown. They are cleared for this window only.
+set "ENV_AUTH="
+for %%v in (HOST TOKEN AUTH_TYPE CLIENT_ID CLIENT_SECRET ACCOUNT_ID WORKSPACE_ID EXPERIMENTAL_IS_UNIFIED_HOST AZURE_RESOURCE_ID USERNAME PASSWORD) do if defined DATABRICKS_%%v (
+  set "ENV_AUTH=!ENV_AUTH! DATABRICKS_%%v"
+  set "DATABRICKS_%%v="
+)
+
 rem ---- console: UTF-8 for the banner and the CLI output, ANSI colours ----------
 set "ORIG_CP="
 for /f "tokens=2 delims=:." %%c in ('chcp') do set "ORIG_CP=%%c"
@@ -73,6 +83,7 @@ set "HITF=!TMPBASE!_hits.txt"
 set "SORTF=!TMPBASE!_sort.txt"
 set "VISF=!TMPBASE!_vis.txt"
 set "FAVTMP=!TMPBASE!_fav.txt"
+set "PRINF=!TMPBASE!_prin.txt"
 
 rem ---- is the Databricks CLI installed, and is it the new one? -----------------
 set "CLI_VER="
@@ -224,6 +235,12 @@ set "NEW_NAME=!NEW_NAME:[=!"
 if not defined NEW_NAME goto :main
 set "NEW_NAME=!NEW_NAME:]=!"
 if not defined NEW_NAME goto :main
+call :bad_chars NEW_NAME ""
+if not errorlevel 1 (
+  echo   !cErr!Profile names may use letters, digits, - _ and . only, and not start with -.!c0!
+  call :pause_any
+  goto :new_profile
+)
 call :pf_find "!NEW_NAME!"
 if not errorlevel 1 (
   echo(
@@ -576,16 +593,13 @@ goto :find_results
 
 rem ---- one scope: secrets, access and actions ----------------------------------
 :scope_page
-call :screen "Scope !SCOPE!"
+call :sp_screen
 echo(
 echo   !cDim!Loading secrets and access for !SCOPE! in !SP!...!c0!
 call :load_secrets "!SP!" "!SCOPE!"
 call :load_acls "!SP!" "!SCOPE!"
 :scope_page_show
-call :screen "Scope !SCOPE!"
-set "SP_HOST="
-call :pf_find "!SP!"
-if defined _pf for %%i in (!_pf!) do set "SP_HOST=!PF_HOST_%%i!"
+call :sp_screen
 set "SP_FAV="
 call :is_fav "!SP_HOST!" "!SCOPE!"
 if not errorlevel 1 set "SP_FAV=1"
@@ -624,6 +638,17 @@ if "!MENU_KEY!"=="R" goto :scope_page
 if "!MENU_KEY!"=="B" goto :scope_back
 goto :scope_page_show
 
+:sp_screen
+rem The scope page's header names the scope's own environment, which differs from the
+rem active profile when the scope was found in another environment
+set "SP_HOST="
+call :pf_find "!SP!"
+if defined _pf for %%i in (!_pf!) do set "SP_HOST=!PF_HOST_%%i!"
+set "SCR_PROF=!SP!"
+set "SCR_HOST=!SP_HOST!"
+call :screen "Scope !SCOPE!"
+exit /b 0
+
 :scope_back
 if "!SCOPE_ORIGIN!"=="list" goto :list_show
 if "!SCOPE_ORIGIN!"=="results" goto :find_results_show
@@ -660,11 +685,17 @@ set "KEY=!KEY:"=!"
 if not defined KEY goto :scope_page_show
 set "KEY=!KEY: =!"
 if not defined KEY goto :scope_page_show
+call :bad_chars KEY ""
+if not errorlevel 1 (
+  echo   !cErr!Key names may use letters, digits, - _ and . only, and not start with -.!c0!
+  call :pause_any
+  goto :scope_page_show
+)
 set "_exists="
 for /l %%i in (1,1,!SE_N!) do if /i "!SE_NAME_%%i!"=="!KEY!" set "_exists=1"
-if defined _exists echo   !cWarn!!KEY! already exists - its value will be replaced.!c0!
+if defined _exists echo   !cWarn!!KEY! already exists in !SP! - its value will be replaced.!c0!
 echo(
-echo   !cKey![T]!c0! Type or paste the value - hidden, one line
+echo   !cKey![T]!c0! Type or paste the value - hidden, one line only
 echo   !cKey![F]!c0! Read the value from a file - for multi-line values like JSON keys or certificates
 echo   !cKey![B]!c0! Back
 echo(
@@ -675,14 +706,39 @@ goto :scope_page_show
 
 :secret_put_typed
 echo(
+rem Clear stray keys first. This also shows whether the rest of a paste with line breaks
+rem can be dropped afterwards - not where PowerShell is blocked.
+set "_flush=1"
+powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1 || set "_flush="
 echo   !cDim!The CLI asks for the value now. Paste with right-click or Ctrl+V, then press Enter.!c0!
+if defined _flush (
+  echo   !cDim!One line only. For a value with line breaks, use F instead.!c0!
+) else (
+  echo   !cWarn!One line only. A paste with line breaks would leave the rest as keystrokes for the next prompts here - use F for those.!c0!
+)
 echo(
-databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!"
-set "_rc=!errorlevel!"
+rem The CLI hides the value only where it may use colours: with NO_COLOR, TERM=dumb or
+rem Git Bash it reads the console in clear instead, so those are cleared for this call.
+rem The log level is pinned too, because debug logging would print the value.
+setlocal
+set "NO_COLOR="
+if /i "!TERM!"=="dumb" set "TERM="
+set "MSYSTEM="
+databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" --log-level error
+endlocal & set "_rc=%errorlevel%"
+rem Drop keys left over from a paste with line breaks, so they can't reach the next prompts
+if defined _flush powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1
+if not "!_rc!"=="0" goto :secret_put_done
+rem A pipe, not <nul: clip takes NUL for console input and leaves the clipboard as it is
+type nul | clip >nul 2>&1
+if errorlevel 1 goto :secret_put_done
+echo(
+echo   !cDim!brickbat emptied the clipboard. If clipboard history is on, delete the value in Win+V too.!c0!
 goto :secret_put_done
 
 :secret_put_file
 echo(
+echo   !cDim!The file is sent exactly as saved, so a line break at the end becomes part of the secret.!c0!
 set "VFILE="
 set /p "VFILE=!c0!   Path to the file - you can drag the file into this window: "
 if not defined VFILE goto :scope_page_show
@@ -694,13 +750,32 @@ if not exist "!VFILE!" (
   call :pause_any
   goto :scope_page_show
 )
-databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" < "!VFILE!"
-set "_rc=!errorlevel!"
+if exist "!VFILE!\" (
+  echo   !cErr!That is a folder, not a file: !VFILE!!c0!
+  call :pause_any
+  goto :scope_page_show
+)
+rem Check the bytes in memory, without showing them. The path reaches PowerShell through
+rem the environment, so no part of it is read as code.
+set "_vf="
+for /f %%r in ('powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$b=[IO.File]::ReadAllBytes($env:VFILE);$n=$b.Length;$f='.';if($n -eq 0){$f+='E'};if($n -ge 2 -and $b[0]+$b[1] -eq 509){$f+='U'};if($n -ge 3 -and $b[0] -eq 239 -and $b[1] -eq 187 -and $b[2] -eq 191){$f+='B'};if($n -gt 0 -and $b[$n-1] -eq 10){$f+='N'};$f" 2^>nul') do set "_vf=%%r"
+if not defined _vf echo   !cDim!brickbat could not check this file - make sure it has no line break at the end.!c0!
+if defined _vf if not "!_vf!"=="." (
+  if not "!_vf:E=!"=="!_vf!" echo   !cWarn!The file is empty.!c0!
+  if not "!_vf:U=!"=="!_vf!" echo   !cWarn!The file is UTF-16 - save it as UTF-8 first, or the secret is stored as UTF-16.!c0!
+  if not "!_vf:B=!"=="!_vf!" echo   !cWarn!The file starts with a byte-order mark - it becomes part of the secret.!c0!
+  if not "!_vf:N=!"=="!_vf!" echo   !cWarn!The file ends with a line break - it becomes part of the secret. Fine for JSON or PEM, wrong for a password or token.!c0!
+  call :confirm
+  if not defined CONFIRMED goto :scope_page_show
+)
+rem || also catches a file that can't be opened, where cmd skips the command and keeps ERRORLEVEL
+set "_rc=0"
+databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" --log-level error < "!VFILE!" || set "_rc=1"
 
 :secret_put_done
 echo(
 if "!_rc!"=="0" (
-  echo   !cOk!Saved !KEY! in !SCOPE!.!c0!
+  echo   !cOk!Saved !KEY! in !SCOPE! in !SP!.!c0!
 ) else (
   echo   !cErr!The secret was not saved - see the message above.!c0!
 )
@@ -735,6 +810,11 @@ goto :scope_page
 rem ---- grant or change access ---------------------------------------------------
 :acl_put
 echo(
+if defined AC_ERR (
+  echo   !cWarn!The access list could not be read, so a change here is not safe. You need MANAGE, or press R to reload.!c0!
+  call :pause_any
+  goto :scope_page_show
+)
 echo   Who should get access? A user e-mail, a group name or a service principal's application ID.
 echo   !cDim!users means everyone in the workspace. Existing access for the same principal is replaced.!c0!
 set "PRIN="
@@ -755,17 +835,44 @@ if "!MENU_KEY!"=="R" set "PERM=READ"
 if "!MENU_KEY!"=="W" set "PERM=WRITE"
 if "!MENU_KEY!"=="M" set "PERM=MANAGE"
 if not defined PERM goto :scope_page_show
+rem What PRIN has now, and how many MANAGE entries the scope has
+set "_cur="
+set "_mg=0"
+for /l %%i in (1,1,!AC_N!) do (
+  if "!AC_PERM_%%i!"=="MANAGE" set /a _mg+=1
+  if /i "!AC_PRIN_%%i!"=="!PRIN!" set "_cur=!AC_PERM_%%i!"
+)
 echo(
+if /i "!_cur!"=="!PERM!" (
+  echo   !cDim!!PRIN! already has !PERM! - nothing to change.!c0!
+  call :pause_any
+  goto :scope_page_show
+)
+if defined _cur echo   !cDim!!PRIN! has !_cur! now - it is replaced.!c0!
+if "!_cur!"=="MANAGE" if not "!PERM!"=="MANAGE" if "!_mg!"=="1" echo   !cWarn!This is the only MANAGE entry - afterwards only a workspace admin can change access here.!c0!
 if /i "!PRIN!"=="!DBX_USER!" if not "!PERM!"=="MANAGE" echo   !cWarn!That is you - with !PERM! you can no longer manage access on this scope.!c0!
 echo   Give !cHead!!PRIN!!c0! !PERM! on !SCOPE! in !SP!?
 call :confirm
 if not defined CONFIRMED goto :scope_page_show
-call :dbx secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!"
+set "DBX_ARGS=secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!""
+call :dbx_args
 if "!DBX_RC!"=="0" goto :acl_put_done
 findstr /i /c:"ALREADY_EXISTS" /c:"already exists" "%ERRF%" >nul 2>&1
 if errorlevel 1 goto :acl_put_done
-call :dbx secrets delete-acl "!SCOPE!" "!PRIN!" -p "!SP!"
-if "!DBX_RC!"=="0" call :dbx secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!"
+rem Replacing means delete, then put. Not for MANAGE: if the put failed, nobody might be left
+if "!_cur!"=="MANAGE" (
+  echo(
+  if /i "!PRIN!"=="!DBX_USER!" (
+    echo   !cWarn!You have MANAGE now. Another MANAGE holder or a workspace admin has to change your entry.!c0!
+  ) else echo   !cWarn!!PRIN! has MANAGE now. Remove it with X first, then grant !PERM!.!c0!
+  goto :acl_put_done
+)
+set "DBX_ARGS=secrets delete-acl "!SCOPE!" "!PRIN!" -p "!SP!""
+call :dbx_args
+if not "!DBX_RC!"=="0" goto :acl_put_done
+set "DBX_ARGS=secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!""
+call :dbx_args
+if not "!DBX_RC!"=="0" echo   !cErr!The old access for !PRIN! was removed, but !PERM! could not be set.!c0!
 :acl_put_done
 set "MSG=!PRIN! now has !PERM! on !SCOPE!."
 call :report
@@ -790,12 +897,16 @@ for %%i in (!PICK!) do (
   set "PRIN=!AC_PRIN_%%i!"
   set "PERM=!AC_PERM_%%i!"
 )
+set "_mg=0"
+for /l %%i in (1,1,!AC_N!) do if "!AC_PERM_%%i!"=="MANAGE" set /a _mg+=1
 echo(
+if "!PERM!"=="MANAGE" if "!_mg!"=="1" echo   !cWarn!This is the only MANAGE entry - afterwards only a workspace admin can change access here.!c0!
 if /i "!PRIN!"=="!DBX_USER!" echo   !cWarn!That is your own entry - you may lose access to this scope.!c0!
 echo   Remove !PERM! for !cHead!!PRIN!!c0! on !SCOPE! in !SP!?
 call :confirm
 if not defined CONFIRMED goto :scope_page_show
-call :dbx secrets delete-acl "!SCOPE!" "!PRIN!" -p "!SP!"
+set "DBX_ARGS=secrets delete-acl "!SCOPE!" "!PRIN!" -p "!SP!""
+call :dbx_args
 set "MSG=Removed the access for !PRIN!."
 call :report
 goto :scope_page
@@ -803,7 +914,7 @@ goto :scope_page
 rem ---- delete the scope --------------------------------------------------------
 :scope_delete
 echo(
-echo   !cErr!Deleting a scope removes it together with every secret in it. This cannot be undone.!c0!
+echo   !cErr!Deleting !SCOPE! in !SP! removes it together with every secret in it. This cannot be undone.!c0!
 if /i "!SCOPE_TYPE!"=="AZURE_KEYVAULT" echo   !cDim!For a Key Vault-backed scope only the link goes - the Key Vault and its secrets stay.!c0!
 set "_c="
 set /p "_c=!c0!   Type the scope name to confirm (blank = back): "
@@ -813,7 +924,7 @@ call :pause_any
 goto :scope_page_show
 :scope_delete_go
 call :dbx secrets delete-scope "!SCOPE!" -p "!SP!"
-set "MSG=Scope !SCOPE! deleted."
+set "MSG=Scope !SCOPE! deleted in !SP!."
 call :report
 if not "!DBX_RC!"=="0" goto :scope_page
 if defined SP_FAV (
@@ -834,6 +945,12 @@ set "NEWSCOPE=!NEWSCOPE:"=!"
 if not defined NEWSCOPE goto :secrets_menu
 set "NEWSCOPE=!NEWSCOPE: =!"
 if not defined NEWSCOPE goto :secrets_menu
+call :bad_chars NEWSCOPE "@"
+if not errorlevel 1 (
+  echo   !cErr!Scope names may use letters, digits, - _ . and @ only, and not start with -.!c0!
+  call :pause_any
+  goto :scope_create
+)
 set "_akv="
 if defined DBX_HOST if not "!DBX_HOST:azuredatabricks=!"=="!DBX_HOST!" set "_akv=1"
 if not defined _akv goto :scope_create_manage
@@ -914,6 +1031,12 @@ set "Q_SCOPE=!Q_SCOPE:"=!"
 if not defined Q_SCOPE goto :secrets_menu
 set "Q_SCOPE=!Q_SCOPE: =!"
 if not defined Q_SCOPE goto :secrets_menu
+call :bad_chars Q_SCOPE "@"
+if not errorlevel 1 (
+  echo   !cErr!Scope names may use letters, digits, - _ . and @ only, and not start with -.!c0!
+  call :pause_any
+  goto :compare_scope
+)
 set "CMP_BACK=menu"
 goto :compare_run
 
@@ -956,7 +1079,11 @@ set "_title=%~1"
 cls
 echo(
 echo   !cBrand!█ BRICKBAT!c0!  !cDim!·!c0!  !cHead!!_title!!c0!
-if defined DBX_PROFILE echo   !cDim!profile !DBX_PROFILE!   !DBX_HOST!!c0!
+if defined SCR_PROF (
+  echo   !cDim!profile !SCR_PROF!   !SCR_HOST!!c0!
+  if not "!SCR_PROF!"=="!DBX_PROFILE!" echo   !cWarn!Not your active profile !DBX_PROFILE! - changes on this page go to !SCR_PROF!.!c0!
+) else if defined DBX_PROFILE echo   !cDim!profile !DBX_PROFILE!   !DBX_HOST!!c0!
+set "SCR_PROF="
 echo   !cDim!──────────────────────────────────────────────────────────────────────────────!c0!
 exit /b 0
 
@@ -980,6 +1107,7 @@ if "!DBX_STATE!"=="IN" (
 ) else (
   echo   !cDim!Status     !c0!!cErr!● Not logged in!c0!  !cDim!no login yet, it expired, or the workspace is unreachable - VPN?!c0!
 )
+if defined ENV_AUTH echo   !cWarn!Note:!c0! !cDim!brickbat ignores!ENV_AUTH! set in Windows and uses the profile shown.!c0!
 if defined DATABRICKS_CONFIG_PROFILE if not "!DATABRICKS_CONFIG_PROFILE!"=="!DBX_PROFILE!" echo   !cWarn!Note:!c0! !cDim!DATABRICKS_CONFIG_PROFILE=!DATABRICKS_CONFIG_PROFILE! is set in Windows and overrides the default for plain databricks commands.!c0!
 echo(
 echo   !cDim!ENVIRONMENTS!c0!
@@ -1235,6 +1363,8 @@ call :parse_acl_json
 exit /b 0
 
 :parse_acl_json
+rem A principal is copied with delayed expansion off and read back with set /p, so ! and ^
+rem in a name survive. The CLI's JSON writes & < > as \u0026 \u003c \u003e and \ as \\.
 set "AC_N=0"
 set "_ape="
 set "_apr="
@@ -1248,8 +1378,18 @@ for /f "usebackq tokens=1,* delims=:" %%a in ("%OUTF%") do (
     set "_ape=!_v!"
   )
   if "!_k!"=="principal" (
-    set "_v=%%b"
+    setlocal DisableDelayedExpansion
+    >"%PRINF%" echo(%%b
+    endlocal
+    set "_v="
+    <"%PRINF%" set /p "_v="
     call :clean_json_value
+    if defined _v (
+      set "_v=!_v:\u0026=&!"
+      set "_v=!_v:\u003c=<!"
+      set "_v=!_v:\u003e=>!"
+      set "_v=!_v:\\=\!"
+    )
     set "_apr=!_v!"
   )
   if "!_k:~0,1!"=="}" call :acl_emit
@@ -1417,6 +1557,14 @@ set "_ty="
 if /i "!FAV_TYPE_%~1!"=="AZURE_KEYVAULT" set "_ty=  !cDim!Azure Key Vault!c0!"
 echo  !cKey!!_num:~-4!!c0!  !FAV_SCOPE_%~1!!_ty!
 exit /b 0
+
+:bad_chars
+rem %1 = variable name, %2 = extra allowed characters. errorlevel 0 when the value has a
+rem character other than letters, digits, . _ - and %2, or starts with - (read as an
+rem option by the CLI). eol is a delimiter, so no line is skipped as a comment.
+if "!%~1:~0,1!"=="-" exit /b 0
+for /f "eol=- delims=abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-%~2" %%x in ("!%~1!") do exit /b 0
+exit /b 1
 
 :is_guid
 rem %1 = text. errorlevel 0 when it looks like an application ID: 8-4-4-4-12 hex digits
@@ -1686,6 +1834,16 @@ set "DBX_RC=!errorlevel!"
 if defined _nc (set "NO_COLOR=!_nc!") else (set "NO_COLOR=")
 exit /b !DBX_RC!
 
+:dbx_args
+rem Like :dbx, with the arguments in DBX_ARGS. They are expanded once and never parsed
+rem again, so ! ^ % & in a principal reach the CLI exactly as shown on screen
+set "_nc=!NO_COLOR!"
+set "NO_COLOR=1"
+databricks !DBX_ARGS! >"%OUTF%" 2>"%ERRF%"
+set "DBX_RC=!errorlevel!"
+if defined _nc (set "NO_COLOR=!_nc!") else (set "NO_COLOR=")
+exit /b !DBX_RC!
+
 :clean_json_value
 rem Strips quotes, surrounding spaces and a trailing comma from _v
 if not defined _v exit /b 0
@@ -1840,7 +1998,7 @@ call :pause_any
 goto :quit
 
 :quit
-del "%OUTF%" "%ERRF%" "%NAMEF%" "%HITF%" "%SORTF%" "%VISF%" "%FAVTMP%" >nul 2>&1
+del "%OUTF%" "%ERRF%" "%NAMEF%" "%HITF%" "%SORTF%" "%VISF%" "%FAVTMP%" "%PRINF%" >nul 2>&1
 if defined ORIG_CP chcp !ORIG_CP! >nul
 endlocal
 exit /b 0
