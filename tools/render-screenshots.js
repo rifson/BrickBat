@@ -1,4 +1,4 @@
-// Renders the README screenshots of brickbat as Windows Terminal windows, with fictional data.
+// Renders the README screenshots of BrickBat as Windows Terminal windows, with fictional data.
 // Layout follows brickbat.bat: same prefixes, padding widths and colours (Campbell scheme),
 // so update a screen here when its menu changes in the script.
 //
@@ -236,13 +236,13 @@ screens['new-profile'] = [
   ...prompt('   Profile name (blank = back): staging'),
 ];
 
-const PS = (cmd) => line(br('[brickbat:dev]'), ' C:\\Users\\jane>', cmd);
+const PS = (cmd) => line(br('[BrickBat:dev]'), ' C:\\Users\\jane>', cmd);
 screens['terminal'] = [
   line(),
   line('  ', br('█ BRICKBAT'), '  ', d('·'), '  ', h('Terminal for dev')),
   line(),
   line('  Every databricks command in here uses profile ', h('dev'), '  ', d(ACTIVE.host)),
-  line('  Type ', h('exit'), ' to go back to brickbat.'),
+  line('  Type ', h('exit'), ' to go back to BrickBat.'),
   line(),
   line('  ', d('Try:  databricks current-user me     databricks clusters list     databricks secrets list-scopes')),
   line(),
@@ -280,7 +280,7 @@ pre{margin:0;padding:10px 14px 18px;font:15px/18px Cascadia,"DejaVu Sans Mono",m
 .b1{color:#ff8058}.b2{color:#ff6844}.b3{color:#ff5032}.b4{color:#ff3621}.b5{color:#de2c1c}.b6{color:#962418}
 .cursor{display:inline-block;width:2px;height:16px;background:#cccccc;vertical-align:-3px}
 </style></head><body><div class="pad"><div class="win">
-<div class="bar"><div class="tab"><div class="ic">C:\\</div>brickbat<span class="x">✕</span></div>
+<div class="bar"><div class="tab"><div class="ic">C:\\</div>BrickBat<span class="x">✕</span></div>
 <div class="plus"><span>+</span><span>⌄</span></div>
 <div class="ctl"><span><svg width="10" height="10"><path d="M0 5.5h10"/></svg></span>
 <span><svg width="10" height="10"><rect x=".5" y=".5" width="9" height="9"/></svg></span>

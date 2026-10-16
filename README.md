@@ -1,8 +1,8 @@
-# brickbat
+# BrickBat
 
 A menu for the Databricks CLI in the Windows terminal.
 
-![brickbat in Windows Terminal](docs/screenshots/front-page.png)
+![BrickBat in Windows Terminal](docs/screenshots/front-page.png)
 
 ## Features
 
