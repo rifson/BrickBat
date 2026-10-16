@@ -1,12 +1,18 @@
-// Renders brickbat screens as Windows Terminal screenshots, with fictional data.
-// Regenerate: npm i playwright@1.56.1 @fontsource/cascadia-mono, then node render.js <out-dir> [screen ...]
-// Layout follows brickbat.bat: same prefixes, padding widths and colours (Campbell scheme).
+// Renders the README screenshots of brickbat as Windows Terminal windows, with fictional data.
+// Layout follows brickbat.bat: same prefixes, padding widths and colours (Campbell scheme),
+// so update a screen here when its menu changes in the script.
+//
+//   cd tools && npm install && npx playwright install chromium
+//   node render-screenshots.js ../docs/screenshots [screen ...]
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
 const OUT = process.argv[2];
 const FONT = path.join(__dirname, 'node_modules/@fontsource/cascadia-mono/files');
+// inlined, because a page made with setContent() may not load file:// fonts
+const font = (n) => 'data:font/woff2;base64,' +
+  fs.readFileSync(path.join(FONT, `cascadia-mono-${n}-normal.woff2`)).toString('base64');
 
 // ---- segments ---------------------------------------------------------------
 const seg = (c) => (t) => ({ c, t });
@@ -18,7 +24,7 @@ const line = (...parts) => parts.map((p) => (typeof p === 'string' ? { c: '', t:
 const CURSOR = { c: 'cursor', t: '' };
 
 // ---- fictional environment --------------------------------------------------
-const VER = 'v1.0.0', CLI = 'CLI v0.298.0';
+const VER = 'v1.1.0', CLI = 'CLI v0.298.0';
 const USER = 'jane.doe@example.com';
 const PROFILES = [
   { name: 'dev', host: 'https://acme-dev.cloud.databricks.com', ok: true, def: true },
@@ -102,7 +108,12 @@ screens['secrets-menu'] = [
   line('  ', k('[2]'), ' Search scopes by name'),
   line('  ', k('[3]'), ' Compare one scope across environments'),
   line('  ', k('[4]'), ' Create a new scope in ', h('dev')),
+  line('  ', k('[F]'), ' Open a favourite'),
   line('  ', k('[B]'), ' Back'),
+  line(),
+  line('  ', d('FAVOURITES')),
+  ...['payments.dev.secrets', 'warehouse.dev.secrets', 'ingest_dev']
+    .map((n, i) => line(' ', k(L(String(i + 1), 4)), '  ', n)),
   line(),
   line('  ', d("Looking inside scopes for a key or someone's access costs one call per scope,")),
   line('  ', d('so it is offered once a list is down to 20 scopes or fewer.')),
@@ -111,21 +122,20 @@ screens['secrets-menu'] = [
 ];
 
 const ALL = [
-  'analytics-sandbox', 'analytics.dev.secrets', 'analytics.dev.sp.secret_scope', 'analytics_exports',
-  'billing-api', 'crm_sync.dev.sp.secret_scope', 'data-platform-admin',
-  'finance_reporting.dev.sp.secret_scope', 'ingest_dev', 'kafka.ingest.dev', 'marketing.dev.secrets',
+  'analytics-sandbox', 'analytics.dev.legacy', 'analytics.dev.secrets', 'analytics_exports',
+  'billing-api', 'crm-sync.dev', 'data-platform-admin', 'finance-reports.dev', 'ingest_dev', 'kafka.ingest.dev', 'marketing.dev.secrets',
   'ml-feature-store', 'payments.dev.secrets', 'search-index.dev', 'warehouse.dev.secrets',
 ];
+// 214 rows scroll past, so the window shows the end of the list, as a real terminal does
+const TAIL = [
+  'search-index.dev', 'sharepoint-sync', 'slack-alerts', 'snowflake-migration',
+  'spark-streaming.dev.secrets', 'support-tools', 'tableau-extracts', 'tax-engine.dev',
+  'telemetry.dev.secrets', 'terraform-ci', 'translations-api', 'user-events.dev', 'vault-sync',
+  'warehouse.dev.secrets', 'weather-feed', 'web-analytics.dev.secrets',
+  'workflows-api', 'zendesk-export',
+];
 screens['scope-list'] = [
-  ...screen('Scopes in dev'),
-  line(),
-  ...ALL.slice(0, 10).map((n, i) => listRow(i + 1, n)),
-  line(' ', d('   ⋮')),
-  ...[
-    [212, 'web-analytics.dev.secrets'],
-    [213, 'workday.dev.sp.secret_scope'],
-    [214, 'zendesk-export'],
-  ].map(([i, n]) => listRow(i, n)),
+  ...TAIL.map((n, i) => listRow(214 - TAIL.length + 1 + i, n)),
   line(),
   line('  ', d('214 scopes')),
   line(),
@@ -135,7 +145,7 @@ screens['scope-list'] = [
   ...choose(),
 ];
 
-const FILTERED = ['analytics-sandbox', 'analytics.dev.secrets', 'analytics.dev.sp.secret_scope',
+const FILTERED = ['analytics-sandbox', 'analytics.dev.legacy', 'analytics.dev.secrets',
   'analytics_exports', 'web-analytics.dev.secrets'];
 screens['scope-filter'] = [
   ...screen('Scopes in dev'),
@@ -171,7 +181,7 @@ screens['scope'] = [
   line(),
   line('  ', k('[A]'), ' Add or update a secret     ', k('[D]'), ' Delete a secret'),
   line('  ', k('[G]'), ' Grant or change access     ', k('[X]'), ' Remove access'),
-  line('  ', k('[E]'), ' This scope in every environment'),
+  line('  ', k('[S]'), ' Save as favourite          ', k('[E]'), ' This scope in every environment'),
   line('  ', k('[Z]'), ' Delete this scope          ', k('[R]'), ' Reload        ', k('[B]'), ' Back'),
   line(),
   ...choose(),
@@ -193,8 +203,10 @@ screens['compare'] = [
   line('  ', d('Checking logins...')),
   line(),
   ...cmpEnv(PROFILES[0], 'analytics.dev.secrets',
-    [['api_key', '2026-07-28 11:30 UTC'], ['warehouse_token', '2026-09-20 10:00 UTC']],
-    [['data-platform-admins', 'MANAGE'], ['analytics-engineers', 'WRITE'], ['analytics-readers', 'READ']]),
+    [['api_key', '2026-07-28 11:30 UTC'], ['service_account.json', '2026-05-02 08:15 UTC'],
+      ['warehouse_token', '2026-09-20 10:00 UTC']],
+    [['data-platform-admins', 'MANAGE'], ['analytics-engineers', 'WRITE'], ['analytics-readers', 'READ'],
+      ['7c1e9a52-3f4b-4d8e-9a61-2b5c8d0e4f17', 'MANAGE']]),
   ...cmpEnv(PROFILES[1], 'analytics.qa.secrets',
     [['api_key', '2026-08-04 09:12 UTC']],
     [['data-platform-admins', 'MANAGE'], ['analytics-readers', 'READ']]),
@@ -234,10 +246,9 @@ screens['terminal'] = [
   line(),
   line('  ', d('Try:  databricks current-user me     databricks clusters list     databricks secrets list-scopes')),
   line(),
-  PS('databricks secrets list-scopes'),
-  line('Scope                                  Backend Type'),
-  ...ALL.slice(0, 8).map((n) => line(P(n, 39), 'DATABRICKS')),
-  line('...'),
+  // piped, so the CLI prints no colours; the column fits the longest scope name in the workspace
+  PS('databricks secrets list-scopes | findstr analytics'),
+  ...FILTERED.map((n) => line(P(n, 29), 'DATABRICKS')),
   line(),
   [...PS(''), CURSOR],
 ];
@@ -245,9 +256,9 @@ screens['terminal'] = [
 // ---- page -------------------------------------------------------------------
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const html = (lines, cols) => `<!doctype html><html><head><meta charset="utf-8"><style>
-@font-face{font-family:Cascadia;src:url(file://${FONT}/cascadia-mono-latin-400-normal.woff2);font-weight:400;unicode-range:U+0000-00FF,U+2000-206F}
-@font-face{font-family:Cascadia;src:url(file://${FONT}/cascadia-mono-latin-700-normal.woff2);font-weight:700;unicode-range:U+0000-00FF,U+2000-206F}
-@font-face{font-family:Cascadia;src:url(file://${FONT}/cascadia-mono-symbols2-400-normal.woff2);font-weight:400 700;unicode-range:U+2500-259F}
+@font-face{font-family:Cascadia;src:url(${font('latin-400')});font-weight:400;unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:Cascadia;src:url(${font('latin-700')});font-weight:700;unicode-range:U+0000-00FF,U+2000-206F}
+@font-face{font-family:Cascadia;src:url(${font('symbols2-400')});font-weight:400 700;unicode-range:U+2500-259F}
 html,body{margin:0;background:transparent}
 .pad{display:inline-block;padding:28px 34px 40px}
 .win{display:inline-block;background:#0c0c0c;border-radius:8px;overflow:hidden;
@@ -274,7 +285,8 @@ pre{margin:0;padding:10px 14px 18px;font:15px/18px Cascadia,"DejaVu Sans Mono",m
 <div class="ctl"><span><svg width="10" height="10"><path d="M0 5.5h10"/></svg></span>
 <span><svg width="10" height="10"><rect x=".5" y=".5" width="9" height="9"/></svg></span>
 <span><svg width="10" height="10"><path d="M0 0l10 10M10 0L0 10"/></svg></span></div></div>
-<pre>${lines.map((l) => l.map((s) => s.c ? `<span class="${s.c}">${esc(s.t)}</span>` : esc(s.t)).join('')).join('\n')}</pre>
+<pre>
+${lines.map((l) => l.map((s) => s.c ? `<span class="${s.c}">${esc(s.t)}</span>` : esc(s.t)).join('')).join('\n')}</pre>
 </div></div></body></html>`;
 
 (async () => {

@@ -4,21 +4,18 @@ rem ============================================================================
 rem  brickbat - a menu for the Databricks CLI in the Windows terminal
 rem
 rem  * Front page with the login status of every profile
-rem  * Browser login, log out, switch profile, add a new profile
-rem  * Secret scopes: show all, search by name, open one, compare one scope
-rem    across environments, add, update and delete secrets, and see, grant,
-rem    change or remove access. Nothing loops over every scope - looking inside
-rem    scopes is only offered for a list of LOOKUP_LIMIT scopes or fewer.
+rem  * Log in, log out, switch or add a profile
+rem  * Secret scopes: list, search, favourites, compare across environments,
+rem    edit secrets and manage access
 rem
-rem  Needs Windows 10 or 11 and the Databricks CLI v0.297 or newer:
-rem      winget install Databricks.DatabricksCLI
-rem  Put this file in a folder on your PATH and type brickbat in any terminal.
+rem  Needs Windows 10 or 11. Double-click it or run it from a terminal - it
+rem  works from any folder, and offers to install the Databricks CLI if missing.
 rem  Set NO_COLOR=1 in Windows if you want it without colours.
 rem
 rem  Unofficial - not affiliated with or endorsed by Databricks, Inc.
 rem  MIT licence, see LICENSE.
 rem ============================================================================
-set "BB_VERSION=1.0.0"
+set "BB_VERSION=1.1.0"
 
 rem ---- settings ----------------------------------------------------------------
 rem  SYNC_CLI_DEFAULT=1 : switching profile here also runs databricks auth switch,
@@ -67,6 +64,7 @@ rem ---- state and temp files --------------------------------------------------
 set "STATE_DIR=!LOCALAPPDATA!\brickbat"
 if not exist "!STATE_DIR!\" mkdir "!STATE_DIR!" >nul 2>&1
 set "STATE_FILE=!STATE_DIR!\last_profile.txt"
+set "FAV_FILE=!STATE_DIR!\favourites.txt"
 set "TMPBASE=!TEMP!\brickbat_!RANDOM!!RANDOM!"
 set "OUTF=!TMPBASE!_out.txt"
 set "ERRF=!TMPBASE!_err.txt"
@@ -74,6 +72,7 @@ set "NAMEF=!TMPBASE!_names.txt"
 set "HITF=!TMPBASE!_hits.txt"
 set "SORTF=!TMPBASE!_sort.txt"
 set "VISF=!TMPBASE!_vis.txt"
+set "FAVTMP=!TMPBASE!_fav.txt"
 
 rem ---- is the Databricks CLI installed, and is it the new one? -----------------
 set "CLI_VER="
@@ -313,6 +312,7 @@ if defined DATABRICKS_CONFIG_FILE set "_cfg=!DATABRICKS_CONFIG_FILE!"
 echo   !cDim!brickbat          !c0!v!BB_VERSION!
 echo   !cDim!Databricks CLI    !c0!!CLI_VER!
 echo   !cDim!Profiles file     !c0!!_cfg!
+echo   !cDim!Favourites        !c0!!FAV_FILE!
 echo   !cDim!Settings          !c0!SYNC_CLI_DEFAULT=!SYNC_CLI_DEFAULT!  LOOKUP_LIMIT=!LOOKUP_LIMIT!
 echo   !cDim!                  !c0!ENV_WORDS=!ENV_WORDS!
 echo   !cDim!                  change them at the top of brickbat.bat!c0!
@@ -351,6 +351,7 @@ if "!DBX_KIND!"=="account" (
   goto :main
 )
 call :screen "Secrets"
+call :load_favs
 echo(
 echo   !cDim!Secrets live in scopes. Access is granted per scope and covers every secret in it.!c0!
 echo(
@@ -358,17 +359,38 @@ echo   !cKey![1]!c0! Show all scopes in !cHead!!DBX_PROFILE!!c0!
 echo   !cKey![2]!c0! Search scopes by name
 echo   !cKey![3]!c0! Compare one scope across environments
 echo   !cKey![4]!c0! Create a new scope in !cHead!!DBX_PROFILE!!c0!
+if not "!FAV_N!"=="0" echo   !cKey![F]!c0! Open a favourite
 echo   !cKey![B]!c0! Back
+echo(
+echo   !cDim!FAVOURITES!c0!
+if "!FAV_N!"=="0" echo   !cDim!  None for !DBX_PROFILE! yet - open one of its scopes and press S.!c0!
+for /l %%i in (1,1,!FAV_N!) do call :print_fav_row %%i
 echo(
 echo   !cDim!Looking inside scopes for a key or someone's access costs one call per scope,!c0!
 echo   !cDim!so it is offered once a list is down to !LOOKUP_LIMIT! scopes or fewer.!c0!
 echo(
-call :menu 1234B
+set "_mk=1234B"
+if not "!FAV_N!"=="0" set "_mk=1234FB"
+call :menu !_mk!
 if "!MENU_KEY!"=="1" goto :show_all
 if "!MENU_KEY!"=="2" goto :search_scopes
 if "!MENU_KEY!"=="3" goto :compare_scope
 if "!MENU_KEY!"=="4" goto :scope_create
+if "!MENU_KEY!"=="F" goto :fav_open
 goto :main
+
+rem ---- open a favourite of the active workspace - 2 calls, like any scope -----
+:fav_open
+set "PICK=1"
+if not "!FAV_N!"=="1" call :pick_number !FAV_N! "   Favourite number (blank = back): "
+if not defined PICK goto :secrets_menu
+for %%i in (!PICK!) do (
+  set "SCOPE=!FAV_SCOPE_%%i!"
+  set "SCOPE_TYPE=!FAV_TYPE_%%i!"
+)
+set "SP=!DBX_PROFILE!"
+set "SCOPE_ORIGIN=menu"
+goto :scope_page
 
 rem ---- show all scopes of the active profile - one call ------------------------
 :show_all
@@ -564,10 +586,18 @@ call :screen "Scope !SCOPE!"
 set "SP_HOST="
 call :pf_find "!SP!"
 if defined _pf for %%i in (!_pf!) do set "SP_HOST=!PF_HOST_%%i!"
+set "SP_FAV="
+call :is_fav "!SP_HOST!" "!SCOPE!"
+if not errorlevel 1 set "SP_FAV=1"
 set "_ty=Databricks"
 if /i "!SCOPE_TYPE!"=="AZURE_KEYVAULT" set "_ty=Azure Key Vault - its secrets are managed in the Key Vault"
+set "_favtag="
+if defined SP_FAV set "_favtag=  !cWarn!favourite!c0!"
+set "_fl=Save as favourite"
+if defined SP_FAV set "_fl=Remove from favourites"
+call :pad _fl 27
 echo(
-echo   !cDim!Scope        !c0!!cHead!!SCOPE!!c0!
+echo   !cDim!Scope        !c0!!cHead!!SCOPE!!c0!!_favtag!
 echo   !cDim!Backend      !c0!!_ty!
 echo   !cDim!Environment  !c0!!SP!  !cDim!!SP_HOST!!c0!
 echo(
@@ -579,14 +609,15 @@ call :print_acls
 echo(
 echo   !cKey![A]!c0! Add or update a secret     !cKey![D]!c0! Delete a secret
 echo   !cKey![G]!c0! Grant or change access     !cKey![X]!c0! Remove access
-echo   !cKey![E]!c0! This scope in every environment
+echo   !cKey![S]!c0! !_fl!!cKey![E]!c0! This scope in every environment
 echo   !cKey![Z]!c0! Delete this scope          !cKey![R]!c0! Reload        !cKey![B]!c0! Back
 echo(
-call :menu ADGXEZRB
+call :menu ADGXSEZRB
 if "!MENU_KEY!"=="A" goto :secret_put
 if "!MENU_KEY!"=="D" goto :secret_delete
 if "!MENU_KEY!"=="G" goto :acl_put
 if "!MENU_KEY!"=="X" goto :acl_delete
+if "!MENU_KEY!"=="S" goto :fav_toggle
 if "!MENU_KEY!"=="E" goto :compare_from_scope
 if "!MENU_KEY!"=="Z" goto :scope_delete
 if "!MENU_KEY!"=="R" goto :scope_page
@@ -597,6 +628,20 @@ goto :scope_page_show
 if "!SCOPE_ORIGIN!"=="list" goto :list_show
 if "!SCOPE_ORIGIN!"=="results" goto :find_results_show
 goto :secrets_menu
+
+rem ---- save or remove a favourite - no calls, a line in favourites.txt --------
+:fav_toggle
+if not defined SP_HOST goto :scope_page_show
+call :fav_host "!SP_HOST!"
+if defined SP_FAV (
+  call :fav_remove "!_fh!" "!SCOPE!"
+  goto :scope_page_show
+)
+set "_ft=!SCOPE_TYPE!"
+if not defined _ft set "_ft=DATABRICKS"
+call :fav_remove "!_fh!" "!SCOPE!"
+(>>"%FAV_FILE%" echo(!_fh! !SCOPE! !_ft!) 2>nul
+goto :scope_page_show
 
 rem ---- add or update a secret --------------------------------------------------
 :secret_put
@@ -771,6 +816,10 @@ call :dbx secrets delete-scope "!SCOPE!" -p "!SP!"
 set "MSG=Scope !SCOPE! deleted."
 call :report
 if not "!DBX_RC!"=="0" goto :scope_page
+if defined SP_FAV (
+  call :fav_host "!SP_HOST!"
+  call :fav_remove "!_fh!" "!SCOPE!"
+)
 goto :secrets_menu
 
 rem ---- create a scope ----------------------------------------------------------
@@ -1333,7 +1382,11 @@ exit /b 0
 :print_acls
 if defined AC_ERR (
   echo   !cWarn!  !AC_ERR!!c0!
-  echo   !cDim!  Seeing and changing access needs MANAGE on the scope.!c0!
+  if "!AC_ERR:does not exist=!"=="!AC_ERR!" (
+    echo   !cDim!  Seeing and changing access needs MANAGE on the scope.!c0!
+  ) else if defined SP_FAV (
+    echo   !cDim!  Press S to remove it from your favourites.!c0!
+  )
   exit /b 0
 )
 if "!AC_N!"=="0" (
@@ -1356,6 +1409,13 @@ if /i "!_rl!"=="WRITE" set "_rc=!cWarn!"
 if /i "!_rl!"=="MANAGE" set "_rc=!cBrand!"
 call :pad _rl 6
 echo  !cKey!!_num:~-4!!c0!  !_rp! !_rc!!_rl!!c0!!_tag!
+exit /b 0
+
+:print_fav_row
+set "_num=    %~1"
+set "_ty="
+if /i "!FAV_TYPE_%~1!"=="AZURE_KEYVAULT" set "_ty=  !cDim!Azure Key Vault!c0!"
+echo  !cKey!!_num:~-4!!c0!  !FAV_SCOPE_%~1!!_ty!
 exit /b 0
 
 :is_guid
@@ -1566,6 +1626,54 @@ set "_seen=!_seen!!_hh!|"
 exit /b 1
 
 rem ============================================================================
+rem  SUBROUTINES - favourites
+rem  favourites.txt in STATE_DIR holds one line per favourite: workspace URL,
+rem  scope name and backend type, separated by spaces. Scope names have none.
+rem ============================================================================
+:fav_host
+rem %1 = workspace URL -> _fh = the same URL without a trailing slash
+set "_fh=%~1"
+if not defined _fh exit /b 0
+if "!_fh:~-1!"=="/" set "_fh=!_fh:~0,-1!"
+exit /b 0
+
+:load_favs
+rem Favourites of the active workspace -> FAV_N, FAV_SCOPE_i, FAV_TYPE_i
+set "FAV_N=0"
+if not defined DBX_HOST exit /b 0
+if not exist "%FAV_FILE%" exit /b 0
+call :fav_host "!DBX_HOST!"
+for /f "usebackq tokens=1,2,3" %%a in ("%FAV_FILE%") do (
+  if /i "%%a"=="!_fh!" (
+    set /a FAV_N+=1
+    set "FAV_SCOPE_!FAV_N!=%%b"
+    set "FAV_TYPE_!FAV_N!=%%c"
+  )
+)
+exit /b 0
+
+:is_fav
+rem %1 = workspace URL, %2 = scope. errorlevel 0 when the scope is a favourite there
+if not exist "%FAV_FILE%" exit /b 1
+call :fav_host "%~1"
+if not defined _fh exit /b 1
+for /f "usebackq tokens=1,2" %%a in ("%FAV_FILE%") do if /i "%%a"=="!_fh!" if "%%b"=="%~2" exit /b 0
+exit /b 1
+
+:fav_remove
+rem %1 = workspace URL without a trailing slash, %2 = scope. Removes that favourite
+if not exist "%FAV_FILE%" exit /b 0
+(
+  for /f "usebackq tokens=1,2,3" %%a in ("%FAV_FILE%") do (
+    set "_keep=1"
+    if /i "%%a"=="%~1" if "%%b"=="%~2" set "_keep="
+    if defined _keep echo(%%a %%b %%c
+  )
+) > "%FAVTMP%"
+move /y "%FAVTMP%" "%FAV_FILE%" >nul 2>&1
+exit /b 0
+
+rem ============================================================================
 rem  SUBROUTINES - running the CLI, input and output helpers
 rem ============================================================================
 :dbx
@@ -1701,16 +1809,20 @@ call :banner
 echo(
 echo   !cErr!The Databricks CLI was not found on this PC.!c0!
 echo(
-echo   Install it with:   winget install Databricks.DatabricksCLI
-echo   then open a new terminal and start brickbat again.
-echo(
 echo   !cKey![Y]!c0! Install it now with winget     !cKey![Q]!c0! Quit
 echo(
 call :menu YQ
 if not "!MENU_KEY!"=="Y" goto :quit
 winget install --id Databricks.DatabricksCLI -e
+set "_rc=!errorlevel!"
+rem 0x8A15002B: no newer version - the CLI is already installed, this window just can't see it
+if "!_rc!"=="-1978335189" set "_rc=0"
 echo(
-echo   Close this window, open a new terminal and start brickbat again.
+if "!_rc!"=="0" (
+  echo   !cOk!Done.!c0! Start brickbat again in a new window so it can find the CLI.
+) else (
+  echo   !cErr!The install did not finish - see the message above.!c0!
+)
 call :pause_any
 goto :quit
 
@@ -1719,17 +1831,16 @@ cls
 call :banner
 echo(
 echo   !cWarn!This looks like the old Python Databricks CLI: !CLI_VER!!c0!
-echo   brickbat needs the new Databricks CLI, v0.297 or newer:
+echo   brickbat needs the new Databricks CLI. Remove the old one with:
 echo(
-echo       winget install Databricks.DatabricksCLI
+echo       pip uninstall databricks-cli
 echo(
-echo   Then make sure it comes first in PATH, or remove the old one with
-echo   pip uninstall databricks-cli
+echo   then start brickbat again - it offers to install the new CLI if it is missing.
 call :pause_any
 goto :quit
 
 :quit
-del "%OUTF%" "%ERRF%" "%NAMEF%" "%HITF%" "%SORTF%" "%VISF%" >nul 2>&1
+del "%OUTF%" "%ERRF%" "%NAMEF%" "%HITF%" "%SORTF%" "%VISF%" "%FAVTMP%" >nul 2>&1
 if defined ORIG_CP chcp !ORIG_CP! >nul
 endlocal
 exit /b 0
