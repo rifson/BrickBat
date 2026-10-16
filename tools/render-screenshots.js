@@ -255,14 +255,15 @@ screens['terminal'] = [
 
 // ---- page -------------------------------------------------------------------
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const html = (lines, cols) => `<!doctype html><html><head><meta charset="utf-8"><style>
+// flat: no padding or shadow, for the animated demo; rows: fixed height, so frames line up
+const html = (lines, cols, { flat = false, rows = 0 } = {}) => `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{font-family:Cascadia;src:url(${font('latin-400')});font-weight:400;unicode-range:U+0000-00FF,U+2000-206F}
 @font-face{font-family:Cascadia;src:url(${font('latin-700')});font-weight:700;unicode-range:U+0000-00FF,U+2000-206F}
 @font-face{font-family:Cascadia;src:url(${font('symbols2-400')});font-weight:400 700;unicode-range:U+2500-259F}
 html,body{margin:0;background:transparent}
-.pad{display:inline-block;padding:28px 34px 40px}
+.pad{display:inline-block;padding:${flat ? 0 : '28px 34px 40px'}}
 .win{display:inline-block;background:#0c0c0c;border-radius:8px;overflow:hidden;
-  box-shadow:0 14px 34px rgba(0,0,0,.38),0 0 0 1px rgba(255,255,255,.07)}
+  box-shadow:${flat ? 'none' : '0 14px 34px rgba(0,0,0,.38),0 0 0 1px rgba(255,255,255,.07)'}}
 .bar{height:40px;background:#202020;display:flex;align-items:flex-end;font:12px "Segoe UI",system-ui,sans-serif;color:#fff}
 .tab{height:32px;margin-left:8px;padding:0 10px 0 12px;background:#0c0c0c;border-radius:6px 6px 0 0;
   display:flex;align-items:center;gap:10px;min-width:200px}
@@ -274,7 +275,7 @@ html,body{margin:0;background:transparent}
 .ctl span{width:46px;display:flex;align-items:center;justify-content:center}
 .ctl svg{stroke:#ddd;stroke-width:1;fill:none}
 pre{margin:0;padding:10px 14px 18px;font:15px/18px Cascadia,"DejaVu Sans Mono",monospace;color:#cccccc;
-  width:${cols}ch;white-space:pre;-webkit-font-smoothing:antialiased}
+  width:${cols}ch;${rows ? `height:${rows * 18}px;` : ''}white-space:pre;-webkit-font-smoothing:antialiased}
 .key{color:#61d6d6}.dim{color:#767676}.head{color:#f2f2f2;font-weight:700}.ok{color:#16c60c}
 .err{color:#e74856}.warn{color:#f9f1a5}.brand{color:#ff3621}
 .b1{color:#ff8058}.b2{color:#ff6844}.b3{color:#ff5032}.b4{color:#ff3621}.b5{color:#de2c1c}.b6{color:#962418}
@@ -289,15 +290,17 @@ pre{margin:0;padding:10px 14px 18px;font:15px/18px Cascadia,"DejaVu Sans Mono",m
 ${lines.map((l) => l.map((s) => s.c ? `<span class="${s.c}">${esc(s.t)}</span>` : esc(s.t)).join('')).join('\n')}</pre>
 </div></div></body></html>`;
 
-(async () => {
+const width = (lines) => Math.max(...lines.map((l) => l.reduce((n, s) => n + [...s.t].length, 0)));
+module.exports = { k, d, h, ok, er, wn, br, P, L, line, CURSOR, PROFILES, ACTIVE, banner, screen, screens, html, width };
+
+if (require.main === module) (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
   const page = await browser.newPage({ deviceScaleFactor: 2, viewport: { width: 1400, height: 900 } });
   const only = process.argv.slice(3);
   for (const [name, lines] of Object.entries(screens)) {
     if (only.length && !only.includes(name)) continue;
-    const width = Math.max(...lines.map((l) => l.reduce((n, s) => n + [...s.t].length, 0)));
-    await page.setContent(html(lines, Math.max(width + 2, 96)));
+    await page.setContent(html(lines, Math.max(width(lines) + 2, 96)));
     await page.evaluate(() => document.fonts.ready);
     const el = await page.$('.pad');
     await el.screenshot({ path: path.join(OUT, `${name}.png`), omitBackground: true });
