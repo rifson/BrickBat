@@ -4,29 +4,7 @@ A menu for the Databricks CLI in the Windows terminal. See which profiles you ar
 
 > **Unofficial.** brickbat is a community tool and is not affiliated with or endorsed by Databricks, Inc. Databricks is a trademark of Databricks, Inc.
 
-```
-  ██████╗ ██████╗ ██╗ ██████╗██╗  ██╗██████╗  █████╗ ████████╗
-  ██╔══██╗██╔══██╗██║██╔════╝██║ ██╔╝██╔══██╗██╔══██╗╚══██╔══╝
-  ██████╔╝██████╔╝██║██║     █████╔╝ ██████╔╝███████║   ██║
-  ██╔══██╗██╔══██╗██║██║     ██╔═██╗ ██╔══██╗██╔══██║   ██║
-  ██████╔╝██║  ██║██║╚██████╗██║  ██╗██████╔╝██║  ██║   ██║
-  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝╚═╝  ╚═╝╚═════╝ ╚═╝  ╚═╝   ╚═╝
-  a menu for the Databricks CLI  ·  unofficial  ·  v1.0.0      CLI v1.3.0
-
-  Profile    dev   CLI default
-  Workspace  https://acme-dev.cloud.databricks.com
-  Status     ● Logged in as jane.doe@example.com
-
-  ENVIRONMENTS
-  ► dev              ● logged in      https://acme-dev.cloud.databricks.com  CLI default
-    qa               ● logged in      https://acme-qa.cloud.databricks.com
-    prod             ○ not logged in  https://acme-prod.cloud.databricks.com
-    azure-sandbox    ● logged in      https://adb-1234567890123456.7.azuredatabricks.net
-
-  [S] Secrets          [P] Switch profile    [T] Terminal with this profile
-  [L] Log in again     [N] New profile       [W] Open workspace in browser
-  [O] Log out          [I] Info and update   [R] Refresh   [Q] Quit
-```
+![The brickbat front page in Windows Terminal, showing the active profile, its login status and every other profile](docs/screenshots/front-page.png)
 
 ## What it does
 
@@ -77,39 +55,40 @@ The front page shows your active profile and every other one. From there:
 - **N** adds a workspace.
 - **T** opens a terminal that uses the active profile.
 
+![Switching profile, with every profile numbered and its login status](docs/screenshots/switch-profile.png)
+
+**N** asks for the workspace URL and a short name, then opens your browser for the sign-in:
+
+![Adding a new profile from a workspace URL](docs/screenshots/new-profile.png)
+
+**T** opens a terminal where every `databricks` command uses the profile you picked:
+
+![A terminal for the dev profile, running databricks secrets list-scopes](docs/screenshots/terminal.png)
+
 In **Secrets**:
+
+![The Secrets menu](docs/screenshots/secrets-menu.png)
 
 1. **Show all scopes** lists every scope in the active workspace. Filter the list by name, then open one by its number.
 2. **Search scopes by name** looks in the active workspace or in every workspace you're logged in to.
 3. **Compare one scope across environments** shows its keys and access side by side.
 4. **Create a new scope.**
 
+![Every scope in the dev workspace, numbered](docs/screenshots/scope-list.png)
+
 Once a list shows 20 scopes or fewer, two more options appear: **Find a key in these scopes** and **Check someone's access on these scopes**.
+
+![The scope list filtered to analytics, with the key and access lookups offered](docs/screenshots/scope-filter.png)
+
+Opening a scope shows its keys, who has access, and what you can do with it. Values are never shown:
+
+![One scope with its secret keys, access entries and actions](docs/screenshots/scope.png)
 
 ### Scopes named per environment
 
 Teams often put the environment in the scope name. When you compare a scope, brickbat finds the environment word in the name, between dots, underscores or dashes. It then looks for the same name with every other environment word in its place:
 
-```
-  █ BRICKBAT  ·  analytics.*.secrets in every environment
-
-  dev  https://acme-dev.cloud.databricks.com
-    Scope  analytics.dev.secrets
-    Keys
-    1  api_key                                      2026-07-28 11:30 UTC
-    2  warehouse_token                              2026-09-20 10:00 UTC
-    Access
-    1  data-platform-admins                                 MANAGE
-    2  analytics-engineers                                  WRITE
-    3  analytics-readers                                    READ
-    4  7c1e9a52-3f4b-4d8e-9a61-2b5c8d0e4f17                 MANAGE  service principal
-
-  qa  https://acme-qa.cloud.databricks.com
-    Scope  analytics.qa.secrets
-    ...
-
-  prod - skipped, not logged in
-```
+![Comparing analytics.*.secrets across dev, qa, prod and azure-sandbox](docs/screenshots/compare.png)
 
 This also works for names like `ingest_dev` and `ingest_prod`. A name without an environment word is matched exactly. If two profiles point at the same workspace, that workspace is checked once.
 
