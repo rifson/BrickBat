@@ -2,7 +2,7 @@
 
 A menu for the Databricks CLI in the Windows terminal.
 
-![BrickBat in Windows Terminal: opening Secrets and comparing analytics.dev.secrets across dev, qa and prod](docs/screenshots/demo.gif)
+![BrickBat demo: the front page, opening a favourite secret scope, and the same scope in dev, qa and prod](docs/screenshots/demo.gif)
 
 ## Features
 

@@ -255,8 +255,18 @@ screens['terminal'] = [
 
 // ---- page -------------------------------------------------------------------
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-// flat: no padding or shadow, for the animated demo; rows: fixed height, so frames line up
-const html = (lines, cols, { flat = false, rows = 0 } = {}) => `<!doctype html><html><head><meta charset="utf-8"><style>
+// For the animated demo: flat drops the padding and shadow, rows fixes the height so frames
+// line up, caption adds a strip under the terminal, key shows the key just pressed in it
+const inter = (w) => 'data:font/woff2;base64,' + fs.readFileSync(
+  path.join(__dirname, `node_modules/@fontsource/inter/files/inter-latin-${w}-normal.woff2`)).toString('base64');
+const captionCss = () => `@font-face{font-family:Inter;src:url(${inter(400)});font-weight:400}
+@font-face{font-family:Inter;src:url(${inter(600)});font-weight:600}
+.cap{height:48px;display:flex;align-items:center;gap:12px;padding:0 20px;background:#151515;
+  border-top:1px solid #272727;font:400 16px Inter,sans-serif;color:#e9e9e9;letter-spacing:.1px}
+.cap .mark{width:4px;height:20px;background:#ff3621;border-radius:2px;flex:none}
+.cap kbd{margin-left:auto;min-width:16px;padding:3px 10px 2px;border:1px solid #4d4d4d;border-bottom-width:3px;
+  border-radius:6px;background:#242424;font:600 14px Inter,sans-serif;color:#fff;text-align:center}`;
+const html = (lines, cols, { flat = false, rows = 0, caption, key } = {}) => `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{font-family:Cascadia;src:url(${font('latin-400')});font-weight:400;unicode-range:U+0000-00FF,U+2000-206F}
 @font-face{font-family:Cascadia;src:url(${font('latin-700')});font-weight:700;unicode-range:U+0000-00FF,U+2000-206F}
 @font-face{font-family:Cascadia;src:url(${font('symbols2-400')});font-weight:400 700;unicode-range:U+2500-259F}
@@ -280,6 +290,8 @@ pre{margin:0;padding:10px 14px 18px;font:15px/18px Cascadia,"DejaVu Sans Mono",m
 .err{color:#e74856}.warn{color:#f9f1a5}.brand{color:#ff3621}
 .b1{color:#ff8058}.b2{color:#ff6844}.b3{color:#ff5032}.b4{color:#ff3621}.b5{color:#de2c1c}.b6{color:#962418}
 .cursor{display:inline-block;width:2px;height:16px;background:#cccccc;vertical-align:-3px}
+.cursor.off{visibility:hidden}
+${caption === undefined ? '' : captionCss()}
 </style></head><body><div class="pad"><div class="win">
 <div class="bar"><div class="tab"><div class="ic">C:\\</div>BrickBat<span class="x">✕</span></div>
 <div class="plus"><span>+</span><span>⌄</span></div>
@@ -288,6 +300,7 @@ pre{margin:0;padding:10px 14px 18px;font:15px/18px Cascadia,"DejaVu Sans Mono",m
 <span><svg width="10" height="10"><path d="M0 0l10 10M10 0L0 10"/></svg></span></div></div>
 <pre>
 ${lines.map((l) => l.map((s) => s.c ? `<span class="${s.c}">${esc(s.t)}</span>` : esc(s.t)).join('')).join('\n')}</pre>
+${caption === undefined ? '' : `<div class="cap"><span class="mark"></span><span>${esc(caption)}</span>${key ? `<kbd>${esc(key)}</kbd>` : ''}</div>`}
 </div></div></body></html>`;
 
 const width = (lines) => Math.max(...lines.map((l) => l.reduce((n, s) => n + [...s.t].length, 0)));
