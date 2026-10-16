@@ -62,6 +62,8 @@ Set the environment variable `NO_COLOR=1` to turn colours off.
 
 ## Good to know
 
+- **Secret values** are never shown or kept by brickbat. A typed value is hidden by the CLI, and the clipboard is cleared after it is saved. A value from a file is sent exactly as saved, so brickbat warns first if the file ends with a line break, starts with a byte-order mark or is UTF-16.
+- **The profile decides the workspace.** `DATABRICKS_HOST` or `DATABRICKS_TOKEN` set in Windows is ignored, so changes always go to the environment shown. A scope opened from another environment says so at the top.
 - **Check someone's access** finds entries for that exact user, group or service principal, not access they get through a group.
 - **Permissions:** seeing a scope's access needs MANAGE on it, and seeing its keys needs READ.
 - **Token profiles:** Log in signs in with OAuth in the browser, so a profile that used a personal access token switches to OAuth.
