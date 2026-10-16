@@ -1,106 +1,69 @@
 # brickbat guide
 
-[Back to the README](../README.md)
-
-- [Install](#install)
-- [Profiles](#profiles)
-- [Secrets](#secrets)
-- [Comparing a scope across environments](#comparing-a-scope-across-environments)
-- [Settings](#settings)
-- [How many calls it makes](#how-many-calls-it-makes)
-- [Good to know](#good-to-know)
-
-## Install
-
-1. Install the Databricks CLI v0.297 or newer: `winget install Databricks.DatabricksCLI`. brickbat offers to install it if it's missing.
-2. Download `brickbat.bat` and put it in a folder on your `PATH`, for example `%USERPROFILE%\bin`.
-3. Type `brickbat` in any terminal, or double-click the file.
-
-If Windows warns about a file downloaded from the internet, right-click it, choose **Properties**, and tick **Unblock**.
-
 ## Profiles
 
-The front page shows the active profile, whether you're logged in, and every other profile in your `.databrickscfg`.
+The front page shows the active profile and every profile in your `.databrickscfg`, each with whether you're logged in.
 
 ![The front page](screenshots/front-page.png)
 
-| Key | Does |
-|---|---|
-| **S** | Secrets |
-| **P** | Switch profile |
-| **T** | Open a terminal for this profile |
-| **L** / **O** | Log in / log out |
-| **N** | Add a new profile |
-| **W** | Open the workspace in the browser |
-| **I** | Versions, settings, and updating the CLI |
-
-**P** lists every profile by number:
+**P** switches profile. By default, the one you pick also becomes the default for plain `databricks` commands.
 
 ![Switching profile](screenshots/switch-profile.png)
 
-**N** asks for the workspace URL and a short name, then opens your browser to sign in:
+**N** adds a profile: paste the workspace URL, give it a short name, and sign in in the browser.
 
 ![Adding a profile](screenshots/new-profile.png)
 
-**T** opens a terminal where every `databricks` command uses that profile. Type `exit` to go back.
+**T** opens a terminal where every `databricks` command uses the active profile. Type `exit` to go back.
 
 ![A terminal for the dev profile](screenshots/terminal.png)
 
 ## Secrets
 
+**S** on the front page opens Secrets. Show every scope in the workspace, search scope names in this workspace or every one you're logged in to, compare a scope across environments, create a scope, or open a favourite.
+
 ![The Secrets menu](screenshots/secrets-menu.png)
 
-**Show all scopes** lists every scope in the workspace. Open one by its number, or filter by name.
+Filter a list of scopes by name, and open one by its number.
 
 ![Every scope in the workspace](screenshots/scope-list.png)
 
-Once a list is down to 20 scopes or fewer, you can also look inside them for a key, or for someone's access.
+When a list is down to 20 scopes or fewer, you can also look inside them for a key, or for someone's access.
 
 ![A filtered list](screenshots/scope-filter.png)
 
-Opening a scope shows its keys and who has access. From here you can add, update or delete secrets, and grant, change or remove READ, WRITE and MANAGE. Secret values are never shown.
+A scope shows its keys and who has access. Add, update or delete secrets, grant, change or remove access, or delete the scope. Secret values are never shown. For a multi-line value, like a JSON key, read it from a file.
 
 ![One scope](screenshots/scope.png)
 
+## Favourites
+
+Press **S** on a scope to save it as a favourite, and **S** again to remove it. Favourites are listed in the Secrets menu of their workspace, and **F** opens one.
+
+They're kept on your PC in `%LOCALAPPDATA%\brickbat\favourites.txt`, one scope per line.
+
 ## Comparing a scope across environments
 
-Teams often put the environment in the scope name, like `analytics.dev.secrets` and `analytics.prod.secrets`. When you compare a scope, brickbat swaps the environment word for each of the others and shows what it finds in every workspace you're logged in to:
+Press **3** in the Secrets menu, or **E** on a scope. When the scope name contains an environment word, like the `dev` in `analytics.dev.secrets`, brickbat swaps it for each of the others and shows the keys and access it finds in every workspace you're logged in to.
 
 ![One scope in every environment](screenshots/compare.png)
 
-The environment word can sit between dots, underscores or dashes, so `ingest_dev` and `ingest_prod` match too. A name without an environment word is matched exactly. If two profiles point at the same workspace, it's checked once.
+The word can be set off by dots, underscores or dashes, so `ingest_dev` matches `ingest_prod` too.
 
 ## Settings
 
-Change these at the top of `brickbat.bat`:
+A few settings are at the top of `brickbat.bat`, each with a comment:
 
-| Setting | Default | What it does |
-|---|---|---|
-| `SYNC_CLI_DEFAULT` | `1` | Switching profile also makes it the CLI default (`databricks auth switch`). With `0`, brickbat keeps its own choice and leaves the CLI default alone. |
-| `LOOKUP_LIMIT` | `20` | The most scopes a key or access lookup checks, one call each. At most 50. |
-| `ENV_WORDS` | `dev test tst qa uat stg stage staging preprod prod prd` | Words that mark the environment inside scope names. |
+- `SYNC_CLI_DEFAULT=1` makes the profile you switch to the CLI default too. Set it to `0` to leave the CLI default alone.
+- `LOOKUP_LIMIT=20` is how short a list must be before brickbat offers to look inside its scopes. At most 50.
+- `ENV_WORDS` lists the environment words used when comparing a scope.
 
 Set the environment variable `NO_COLOR=1` to turn colours off.
 
-## How many calls it makes
-
-Workspaces can have thousands of secret scopes, and Databricks only lists keys and access one scope at a time. brickbat never loops over every scope:
-
-| Action | Calls to Databricks |
-|---|---|
-| Show all scopes | 1 |
-| Filter the list by name | 0 |
-| Search scopes by name | 1 per environment |
-| Open a scope | 2 |
-| One scope in every environment | 1 per environment, plus 2 per scope found |
-| Find a key, or someone's access, in the scopes shown | 1 per scope, only for `LOOKUP_LIMIT` scopes or fewer |
-
 ## Good to know
 
-- **Group access isn't resolved.** Access lists show direct entries only.
+- **Check someone's access** finds entries for that exact user, group or service principal, not access they get through a group.
 - **Permissions:** seeing a scope's access needs MANAGE on it, and seeing its keys needs READ.
-- **Token profiles:** Log in uses OAuth in the browser, so a profile that used a personal access token switches to OAuth.
-- **Log out** clears the cached login. The delete option also removes the profile from `.databrickscfg`.
-- **Azure Key Vault-backed scopes** are read-only from Databricks. Change their secrets in the Key Vault.
-- **Account console profiles** can log in and out, but have no secret scopes.
-- **Temporary files:** brickbat writes scope and key names (never values) to `%TEMP%` and removes them when you quit with **Q**.
+- **Token profiles:** Log in signs in with OAuth in the browser, so a profile that used a personal access token switches to OAuth.
+- **Azure Key Vault-backed scopes:** add and delete their secrets in the Key Vault. You can still manage who has access here.
+- **Files:** your last profile and your favourites are kept in `%LOCALAPPDATA%\brickbat`. CLI output (names, never secret values) goes to `%TEMP%` and is deleted when you quit with **Q**.

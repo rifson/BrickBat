@@ -1,6 +1,8 @@
-// Renders brickbat screens as Windows Terminal screenshots, with fictional data.
-// Regenerate: npm i playwright@1.56.1 @fontsource/cascadia-mono, then node render.js <out-dir> [screen ...]
-// Layout follows brickbat.bat: same prefixes, padding widths and colours (Campbell scheme).
+// Renders the README screenshots of brickbat as Windows Terminal windows, with fictional data.
+// Layout follows brickbat.bat: same prefixes, padding widths and colours (Campbell scheme),
+// so update a screen here when its menu changes in the script.
+//
+//   cd tools && npm install && node render-screenshots.js ../docs/screenshots [screen ...]
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
@@ -18,7 +20,7 @@ const line = (...parts) => parts.map((p) => (typeof p === 'string' ? { c: '', t:
 const CURSOR = { c: 'cursor', t: '' };
 
 // ---- fictional environment --------------------------------------------------
-const VER = 'v1.0.0', CLI = 'CLI v0.298.0';
+const VER = 'v1.1.0', CLI = 'CLI v0.298.0';
 const USER = 'jane.doe@example.com';
 const PROFILES = [
   { name: 'dev', host: 'https://acme-dev.cloud.databricks.com', ok: true, def: true },
@@ -102,7 +104,12 @@ screens['secrets-menu'] = [
   line('  ', k('[2]'), ' Search scopes by name'),
   line('  ', k('[3]'), ' Compare one scope across environments'),
   line('  ', k('[4]'), ' Create a new scope in ', h('dev')),
+  line('  ', k('[F]'), ' Open a favourite'),
   line('  ', k('[B]'), ' Back'),
+  line(),
+  line('  ', d('FAVOURITES')),
+  ...['payments.dev.secrets', 'warehouse.dev.secrets', 'ingest_dev']
+    .map((n, i) => line(' ', k(L(String(i + 1), 4)), '  ', n)),
   line(),
   line('  ', d("Looking inside scopes for a key or someone's access costs one call per scope,")),
   line('  ', d('so it is offered once a list is down to 20 scopes or fewer.')),
@@ -116,16 +123,16 @@ const ALL = [
   'finance_reporting.dev.sp.secret_scope', 'ingest_dev', 'kafka.ingest.dev', 'marketing.dev.secrets',
   'ml-feature-store', 'payments.dev.secrets', 'search-index.dev', 'warehouse.dev.secrets',
 ];
+// 214 rows scroll past, so the window shows the end of the list, as a real terminal does
+const TAIL = [
+  'search-index.dev', 'sharepoint-sync', 'slack-alerts', 'snowflake-migration',
+  'spark-streaming.dev.secrets', 'support-tools', 'tableau-extracts', 'talent.dev.sp.secret_scope',
+  'telemetry.dev.secrets', 'terraform-ci', 'translations-api', 'user-events.dev', 'vault-sync',
+  'warehouse.dev.secrets', 'weather-feed', 'web-analytics.dev.secrets',
+  'workday.dev.sp.secret_scope', 'zendesk-export',
+];
 screens['scope-list'] = [
-  ...screen('Scopes in dev'),
-  line(),
-  ...ALL.slice(0, 10).map((n, i) => listRow(i + 1, n)),
-  line(' ', d('   ⋮')),
-  ...[
-    [212, 'web-analytics.dev.secrets'],
-    [213, 'workday.dev.sp.secret_scope'],
-    [214, 'zendesk-export'],
-  ].map(([i, n]) => listRow(i, n)),
+  ...TAIL.map((n, i) => listRow(214 - TAIL.length + 1 + i, n)),
   line(),
   line('  ', d('214 scopes')),
   line(),
@@ -171,7 +178,7 @@ screens['scope'] = [
   line(),
   line('  ', k('[A]'), ' Add or update a secret     ', k('[D]'), ' Delete a secret'),
   line('  ', k('[G]'), ' Grant or change access     ', k('[X]'), ' Remove access'),
-  line('  ', k('[E]'), ' This scope in every environment'),
+  line('  ', k('[S]'), ' Save as favourite          ', k('[E]'), ' This scope in every environment'),
   line('  ', k('[Z]'), ' Delete this scope          ', k('[R]'), ' Reload        ', k('[B]'), ' Back'),
   line(),
   ...choose(),

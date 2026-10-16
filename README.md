@@ -1,27 +1,26 @@
 # brickbat
 
-A menu for the Databricks CLI in the Windows terminal. Log in, switch profiles and manage secret scopes without remembering the commands.
+A menu for the Databricks CLI in the Windows terminal.
 
 ![brickbat in Windows Terminal](docs/screenshots/front-page.png)
 
-- See which profiles you're logged in to, and log in through the browser.
-- Switch profile, add a workspace, or open a terminal for one profile.
-- Browse and search secret scopes, add or delete secrets, and manage who has access.
-- Compare one scope across dev, qa and prod.
+## Features
 
-Works with Databricks on AWS, Azure and Google Cloud.
+- Login status of every profile at a glance
+- Log in through the browser, log out, switch or add a profile
+- A terminal where every `databricks` command uses the profile you picked
+- Browse, search, create and delete secret scopes
+- Add, update and delete secrets, without ever showing their values
+- Grant, change and remove access to a scope
+- Favourite scopes, a key press away
+- Compare one scope across dev, qa and prod
+- Works with AWS, Azure and Google Cloud workspaces
 
-## Install
+## Get started
 
-You need Windows 10 or 11 and the Databricks CLI v0.297 or newer (`winget install Databricks.DatabricksCLI`).
+Download [`brickbat.bat`](brickbat.bat) and double-click it. It runs on Windows 10 or 11 from any folder, and offers to install the Databricks CLI if you don't have it.
 
-1. Download [`brickbat.bat`](brickbat.bat).
-2. Put it in a folder on your `PATH`.
-3. Run `brickbat`.
-
-## More
-
-The [guide](docs/GUIDE.md) has screenshots of every screen, the settings, and the details.
+Screenshots and details are in the [guide](docs/GUIDE.md).
 
 ---
 
