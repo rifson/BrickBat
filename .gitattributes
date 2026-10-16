@@ -1,6 +1,7 @@
 * text=auto
 
 # Batch files must keep Windows line endings: cmd.exe can misread labels
-# and jumps in a .bat file that only has LF line endings.
-*.bat text eol=crlf
-*.cmd text eol=crlf
+# and jumps in a .bat file that only has LF line endings. They are stored
+# as they are (CRLF), so a file downloaded straight from GitHub works too.
+*.bat -text
+*.cmd -text
