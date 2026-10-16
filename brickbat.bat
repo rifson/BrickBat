@@ -363,7 +363,7 @@ if not "!FAV_N!"=="0" echo   !cKey![F]!c0! Open a favourite
 echo   !cKey![B]!c0! Back
 echo(
 echo   !cDim!FAVOURITES!c0!
-if "!FAV_N!"=="0" echo   !cDim!  None yet - open a scope and press S to save it here.!c0!
+if "!FAV_N!"=="0" echo   !cDim!  None for !DBX_PROFILE! yet - open one of its scopes and press S.!c0!
 for /l %%i in (1,1,!FAV_N!) do call :print_fav_row %%i
 echo(
 echo   !cDim!Looking inside scopes for a key or someone's access costs one call per scope,!c0!
@@ -639,6 +639,7 @@ if defined SP_FAV (
 )
 set "_ft=!SCOPE_TYPE!"
 if not defined _ft set "_ft=DATABRICKS"
+call :fav_remove "!_fh!" "!SCOPE!"
 (>>"%FAV_FILE%" echo(!_fh! !SCOPE! !_ft!) 2>nul
 goto :scope_page_show
 
@@ -1381,7 +1382,11 @@ exit /b 0
 :print_acls
 if defined AC_ERR (
   echo   !cWarn!  !AC_ERR!!c0!
-  echo   !cDim!  Seeing and changing access needs MANAGE on the scope.!c0!
+  if "!AC_ERR:does not exist=!"=="!AC_ERR!" (
+    echo   !cDim!  Seeing and changing access needs MANAGE on the scope.!c0!
+  ) else if defined SP_FAV (
+    echo   !cDim!  Press S to remove it from your favourites.!c0!
+  )
   exit /b 0
 )
 if "!AC_N!"=="0" (
@@ -1810,6 +1815,8 @@ call :menu YQ
 if not "!MENU_KEY!"=="Y" goto :quit
 winget install --id Databricks.DatabricksCLI -e
 set "_rc=!errorlevel!"
+rem 0x8A15002B: no newer version - the CLI is already installed, this window just can't see it
+if "!_rc!"=="-1978335189" set "_rc=0"
 echo(
 if "!_rc!"=="0" (
   echo   !cOk!Done.!c0! Start brickbat again in a new window so it can find the CLI.
