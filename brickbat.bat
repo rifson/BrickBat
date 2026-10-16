@@ -34,12 +34,12 @@ rem              other environments, that word is swapped for each of these.
 set "ENV_WORDS=dev test tst qa uat stg stage staging preprod prod prd"
 
 rem ---- the workspace comes from the profile only -------------------------------
-rem  brickbat picks the workspace with -p. Older CLI versions let DATABRICKS_HOST and
-rem  DATABRICKS_TOKEN set in Windows win over -p, so changes would go to that workspace
+rem  brickbat picks the workspace with -p. The CLI lets DATABRICKS_HOST, DATABRICKS_TOKEN
+rem  and the like set in Windows win over -p, so changes would go to that workspace
 rem  instead of the one shown. They are cleared for this window only.
 set "ENV_AUTH="
-for %%v in (HOST TOKEN AUTH_TYPE CLIENT_ID CLIENT_SECRET ACCOUNT_ID AZURE_RESOURCE_ID USERNAME PASSWORD) do if defined DATABRICKS_%%v (
-  set "ENV_AUTH=1"
+for %%v in (HOST TOKEN AUTH_TYPE CLIENT_ID CLIENT_SECRET ACCOUNT_ID WORKSPACE_ID EXPERIMENTAL_IS_UNIFIED_HOST AZURE_RESOURCE_ID USERNAME PASSWORD) do if defined DATABRICKS_%%v (
+  set "ENV_AUTH=!ENV_AUTH! DATABRICKS_%%v"
   set "DATABRICKS_%%v="
 )
 
@@ -83,6 +83,7 @@ set "HITF=!TMPBASE!_hits.txt"
 set "SORTF=!TMPBASE!_sort.txt"
 set "VISF=!TMPBASE!_vis.txt"
 set "FAVTMP=!TMPBASE!_fav.txt"
+set "PRINF=!TMPBASE!_prin.txt"
 
 rem ---- is the Databricks CLI installed, and is it the new one? -----------------
 set "CLI_VER="
@@ -236,7 +237,7 @@ set "NEW_NAME=!NEW_NAME:]=!"
 if not defined NEW_NAME goto :main
 call :bad_chars NEW_NAME ""
 if not errorlevel 1 (
-  echo   !cErr!Profile names may use letters, digits, - _ and . only.!c0!
+  echo   !cErr!Profile names may use letters, digits, - _ and . only, and not start with -.!c0!
   call :pause_any
   goto :new_profile
 )
@@ -717,12 +718,19 @@ if /i "!TERM!"=="dumb" set "TERM="
 set "MSYSTEM="
 databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" --log-level error
 endlocal & set "_rc=%errorlevel%"
-rem Drop keys left over from a paste with line breaks, so they can't reach the next prompts
-powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1
+rem Drop keys left over from a paste with line breaks, so they can't reach the next prompts.
+rem Where PowerShell is blocked, choice swallows them instead, without showing them.
+powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1 || (
+  echo(
+  echo   !cWarn!If you pasted more than one line, the rest is still waiting as keystrokes. Press Q to drop it.!c0!
+  choice /c Q /n >nul
+)
 if not "!_rc!"=="0" goto :secret_put_done
-clip <nul >nul 2>&1
+rem A pipe, not <nul: clip takes NUL for console input and leaves the clipboard as it is
+type nul | clip >nul 2>&1
+if errorlevel 1 goto :secret_put_done
 echo(
-echo   !cDim!The clipboard was cleared. If clipboard history is on, check Win+V too.!c0!
+echo   !cDim!brickbat emptied the clipboard. If clipboard history is on, delete the value in Win+V too.!c0!
 goto :secret_put_done
 
 :secret_put_file
@@ -745,9 +753,10 @@ if exist "!VFILE!\" (
   goto :scope_page_show
 )
 rem Check the bytes in memory, without showing them. The path reaches PowerShell through
-rem the environment, so no part of it is read as code. No PowerShell: no check.
+rem the environment, so no part of it is read as code.
 set "_vf="
-for /f %%r in ('powershell -NoProfile -NonInteractive -Command "$b=[IO.File]::ReadAllBytes($env:VFILE);$n=$b.Length;$f='.';if($n -eq 0){$f+='E'};if($n -ge 2 -and $b[0]+$b[1] -eq 509){$f+='U'};if($n -ge 3 -and $b[0] -eq 239 -and $b[1] -eq 187 -and $b[2] -eq 191){$f+='B'};if($n -gt 0 -and $b[$n-1] -eq 10){$f+='N'};$f" 2^>nul') do set "_vf=%%r"
+for /f %%r in ('powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$b=[IO.File]::ReadAllBytes($env:VFILE);$n=$b.Length;$f='.';if($n -eq 0){$f+='E'};if($n -ge 2 -and $b[0]+$b[1] -eq 509){$f+='U'};if($n -ge 3 -and $b[0] -eq 239 -and $b[1] -eq 187 -and $b[2] -eq 191){$f+='B'};if($n -gt 0 -and $b[$n-1] -eq 10){$f+='N'};$f" 2^>nul') do set "_vf=%%r"
+if not defined _vf echo   !cDim!brickbat could not check this file - make sure it has no line break at the end.!c0!
 if defined _vf if not "!_vf!"=="." (
   if not "!_vf:E=!"=="!_vf!" echo   !cWarn!The file is empty.!c0!
   if not "!_vf:U=!"=="!_vf!" echo   !cWarn!The file is UTF-16 - save it as UTF-8 first, or the secret is stored as UTF-16.!c0!
@@ -798,6 +807,11 @@ goto :scope_page
 rem ---- grant or change access ---------------------------------------------------
 :acl_put
 echo(
+if defined AC_ERR (
+  echo   !cWarn!The access list could not be read, so a change here is not safe. You need MANAGE, or press R to reload.!c0!
+  call :pause_any
+  goto :scope_page_show
+)
 echo   Who should get access? A user e-mail, a group name or a service principal's application ID.
 echo   !cDim!users means everyone in the workspace. Existing access for the same principal is replaced.!c0!
 set "PRIN="
@@ -826,6 +840,11 @@ for /l %%i in (1,1,!AC_N!) do (
   if /i "!AC_PRIN_%%i!"=="!PRIN!" set "_cur=!AC_PERM_%%i!"
 )
 echo(
+if /i "!_cur!"=="!PERM!" (
+  echo   !cDim!!PRIN! already has !PERM! - nothing to change.!c0!
+  call :pause_any
+  goto :scope_page_show
+)
 if defined _cur echo   !cDim!!PRIN! has !_cur! now - it is replaced.!c0!
 if "!_cur!"=="MANAGE" if not "!PERM!"=="MANAGE" if "!_mg!"=="1" echo   !cWarn!This is the only MANAGE entry - afterwards only a workspace admin can change access here.!c0!
 if /i "!PRIN!"=="!DBX_USER!" if not "!PERM!"=="MANAGE" echo   !cWarn!That is you - with !PERM! you can no longer manage access on this scope.!c0!
@@ -840,7 +859,9 @@ if errorlevel 1 goto :acl_put_done
 rem Replacing means delete, then put. Not for MANAGE: if the put failed, nobody might be left
 if "!_cur!"=="MANAGE" (
   echo(
-  echo   !cWarn!!PRIN! has MANAGE now. Remove it with X first, then grant !PERM!.!c0!
+  if /i "!PRIN!"=="!DBX_USER!" (
+    echo   !cWarn!You have MANAGE now. Another MANAGE holder or a workspace admin has to change your entry.!c0!
+  ) else echo   !cWarn!!PRIN! has MANAGE now. Remove it with X first, then grant !PERM!.!c0!
   goto :acl_put_done
 )
 set "DBX_ARGS=secrets delete-acl "!SCOPE!" "!PRIN!" -p "!SP!""
@@ -1009,7 +1030,7 @@ set "Q_SCOPE=!Q_SCOPE: =!"
 if not defined Q_SCOPE goto :secrets_menu
 call :bad_chars Q_SCOPE "@"
 if not errorlevel 1 (
-  echo   !cErr!Scope names may use letters, digits, - _ . and @ only.!c0!
+  echo   !cErr!Scope names may use letters, digits, - _ . and @ only, and not start with -.!c0!
   call :pause_any
   goto :compare_scope
 )
@@ -1083,7 +1104,7 @@ if "!DBX_STATE!"=="IN" (
 ) else (
   echo   !cDim!Status     !c0!!cErr!● Not logged in!c0!  !cDim!no login yet, it expired, or the workspace is unreachable - VPN?!c0!
 )
-if defined ENV_AUTH echo   !cWarn!Note:!c0! !cDim!DATABRICKS_HOST or DATABRICKS_TOKEN is set in Windows - brickbat ignores it and uses the profile shown.!c0!
+if defined ENV_AUTH echo   !cWarn!Note:!c0! !cDim!brickbat ignores!ENV_AUTH! set in Windows and uses the profile shown.!c0!
 if defined DATABRICKS_CONFIG_PROFILE if not "!DATABRICKS_CONFIG_PROFILE!"=="!DBX_PROFILE!" echo   !cWarn!Note:!c0! !cDim!DATABRICKS_CONFIG_PROFILE=!DATABRICKS_CONFIG_PROFILE! is set in Windows and overrides the default for plain databricks commands.!c0!
 echo(
 echo   !cDim!ENVIRONMENTS!c0!
@@ -1339,7 +1360,8 @@ call :parse_acl_json
 exit /b 0
 
 :parse_acl_json
-rem The CLI's JSON writes & < > in names as \u0026 \u003c \u003e - they are turned back
+rem A principal is copied with delayed expansion off and read back with set /p, so ! and ^
+rem in a name survive. The CLI's JSON writes & < > as \u0026 \u003c \u003e and \ as \\.
 set "AC_N=0"
 set "_ape="
 set "_apr="
@@ -1353,12 +1375,17 @@ for /f "usebackq tokens=1,* delims=:" %%a in ("%OUTF%") do (
     set "_ape=!_v!"
   )
   if "!_k!"=="principal" (
-    set "_v=%%b"
+    setlocal DisableDelayedExpansion
+    >"%PRINF%" echo(%%b
+    endlocal
+    set "_v="
+    <"%PRINF%" set /p "_v="
     call :clean_json_value
     if defined _v (
       set "_v=!_v:\u0026=&!"
       set "_v=!_v:\u003c=<!"
       set "_v=!_v:\u003e=>!"
+      set "_v=!_v:\\=\!"
     )
     set "_apr=!_v!"
   )
@@ -1968,7 +1995,7 @@ call :pause_any
 goto :quit
 
 :quit
-del "%OUTF%" "%ERRF%" "%NAMEF%" "%HITF%" "%SORTF%" "%VISF%" "%FAVTMP%" >nul 2>&1
+del "%OUTF%" "%ERRF%" "%NAMEF%" "%HITF%" "%SORTF%" "%VISF%" "%FAVTMP%" "%PRINF%" >nul 2>&1
 if defined ORIG_CP chcp !ORIG_CP! >nul
 endlocal
 exit /b 0
