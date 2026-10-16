@@ -706,8 +706,16 @@ goto :scope_page_show
 
 :secret_put_typed
 echo(
+rem Clear stray keys first. This also shows whether the rest of a paste with line breaks
+rem can be dropped afterwards - not where PowerShell is blocked.
+set "_flush=1"
+powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1 || set "_flush="
 echo   !cDim!The CLI asks for the value now. Paste with right-click or Ctrl+V, then press Enter.!c0!
-echo   !cDim!One line only - for a value with line breaks, go back and use F.!c0!
+if defined _flush (
+  echo   !cDim!One line only. For a value with line breaks, use F instead.!c0!
+) else (
+  echo   !cWarn!One line only. A paste with line breaks would leave the rest as keystrokes for the next prompts here - use F for those.!c0!
+)
 echo(
 rem The CLI hides the value only where it may use colours: with NO_COLOR, TERM=dumb or
 rem Git Bash it reads the console in clear instead, so those are cleared for this call.
@@ -718,13 +726,8 @@ if /i "!TERM!"=="dumb" set "TERM="
 set "MSYSTEM="
 databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" --log-level error
 endlocal & set "_rc=%errorlevel%"
-rem Drop keys left over from a paste with line breaks, so they can't reach the next prompts.
-rem Where PowerShell is blocked, choice swallows them instead, without showing them.
-powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1 || (
-  echo(
-  echo   !cWarn!If you pasted more than one line, the rest is still waiting as keystrokes. Press Q to drop it.!c0!
-  choice /c Q /n >nul
-)
+rem Drop keys left over from a paste with line breaks, so they can't reach the next prompts
+if defined _flush powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1
 if not "!_rc!"=="0" goto :secret_put_done
 rem A pipe, not <nul: clip takes NUL for console input and leaves the clipboard as it is
 type nul | clip >nul 2>&1
