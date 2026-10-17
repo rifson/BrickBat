@@ -1,4 +1,4 @@
-// Renders the README screenshots of brickbat as Windows Terminal windows, with fictional data.
+// Renders the README screenshots of BrickBat as Windows Terminal windows, with fictional data.
 // Layout follows brickbat.bat: same prefixes, padding widths and colours (Campbell scheme),
 // so update a screen here when its menu changes in the script.
 //
@@ -236,13 +236,13 @@ screens['new-profile'] = [
   ...prompt('   Profile name (blank = back): staging'),
 ];
 
-const PS = (cmd) => line(br('[brickbat:dev]'), ' C:\\Users\\jane>', cmd);
+const PS = (cmd) => line(br('[BrickBat:dev]'), ' C:\\Users\\jane>', cmd);
 screens['terminal'] = [
   line(),
   line('  ', br('█ BRICKBAT'), '  ', d('·'), '  ', h('Terminal for dev')),
   line(),
   line('  Every databricks command in here uses profile ', h('dev'), '  ', d(ACTIVE.host)),
-  line('  Type ', h('exit'), ' to go back to brickbat.'),
+  line('  Type ', h('exit'), ' to go back to BrickBat.'),
   line(),
   line('  ', d('Try:  databricks current-user me     databricks clusters list     databricks secrets list-scopes')),
   line(),
@@ -255,14 +255,25 @@ screens['terminal'] = [
 
 // ---- page -------------------------------------------------------------------
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-const html = (lines, cols) => `<!doctype html><html><head><meta charset="utf-8"><style>
+// For the animated demo: flat drops the padding and shadow, rows fixes the height so frames
+// line up, caption adds a strip under the terminal, key shows the key just pressed in it
+const inter = (w) => 'data:font/woff2;base64,' + fs.readFileSync(
+  path.join(__dirname, `node_modules/@fontsource/inter/files/inter-latin-${w}-normal.woff2`)).toString('base64');
+const captionCss = () => `@font-face{font-family:Inter;src:url(${inter(400)});font-weight:400}
+@font-face{font-family:Inter;src:url(${inter(600)});font-weight:600}
+.cap{height:48px;display:flex;align-items:center;gap:12px;padding:0 20px;background:#151515;
+  border-top:1px solid #272727;font:400 16px Inter,sans-serif;color:#e9e9e9;letter-spacing:.1px}
+.cap .mark{width:4px;height:20px;background:#ff3621;border-radius:2px;flex:none}
+.cap kbd{margin-left:auto;min-width:16px;padding:3px 10px 2px;border:1px solid #4d4d4d;border-bottom-width:3px;
+  border-radius:6px;background:#242424;font:600 14px Inter,sans-serif;color:#fff;text-align:center}`;
+const html = (lines, cols, { flat = false, rows = 0, caption, key } = {}) => `<!doctype html><html><head><meta charset="utf-8"><style>
 @font-face{font-family:Cascadia;src:url(${font('latin-400')});font-weight:400;unicode-range:U+0000-00FF,U+2000-206F}
 @font-face{font-family:Cascadia;src:url(${font('latin-700')});font-weight:700;unicode-range:U+0000-00FF,U+2000-206F}
 @font-face{font-family:Cascadia;src:url(${font('symbols2-400')});font-weight:400 700;unicode-range:U+2500-259F}
 html,body{margin:0;background:transparent}
-.pad{display:inline-block;padding:28px 34px 40px}
+.pad{display:inline-block;padding:${flat ? 0 : '28px 34px 40px'}}
 .win{display:inline-block;background:#0c0c0c;border-radius:8px;overflow:hidden;
-  box-shadow:0 14px 34px rgba(0,0,0,.38),0 0 0 1px rgba(255,255,255,.07)}
+  box-shadow:${flat ? 'none' : '0 14px 34px rgba(0,0,0,.38),0 0 0 1px rgba(255,255,255,.07)'}}
 .bar{height:40px;background:#202020;display:flex;align-items:flex-end;font:12px "Segoe UI",system-ui,sans-serif;color:#fff}
 .tab{height:32px;margin-left:8px;padding:0 10px 0 12px;background:#0c0c0c;border-radius:6px 6px 0 0;
   display:flex;align-items:center;gap:10px;min-width:200px}
@@ -274,30 +285,35 @@ html,body{margin:0;background:transparent}
 .ctl span{width:46px;display:flex;align-items:center;justify-content:center}
 .ctl svg{stroke:#ddd;stroke-width:1;fill:none}
 pre{margin:0;padding:10px 14px 18px;font:15px/18px Cascadia,"DejaVu Sans Mono",monospace;color:#cccccc;
-  width:${cols}ch;white-space:pre;-webkit-font-smoothing:antialiased}
+  width:${cols}ch;${rows ? `height:${rows * 18}px;` : ''}white-space:pre;-webkit-font-smoothing:antialiased}
 .key{color:#61d6d6}.dim{color:#767676}.head{color:#f2f2f2;font-weight:700}.ok{color:#16c60c}
 .err{color:#e74856}.warn{color:#f9f1a5}.brand{color:#ff3621}
 .b1{color:#ff8058}.b2{color:#ff6844}.b3{color:#ff5032}.b4{color:#ff3621}.b5{color:#de2c1c}.b6{color:#962418}
 .cursor{display:inline-block;width:2px;height:16px;background:#cccccc;vertical-align:-3px}
+.cursor.off{visibility:hidden}
+${caption === undefined ? '' : captionCss()}
 </style></head><body><div class="pad"><div class="win">
-<div class="bar"><div class="tab"><div class="ic">C:\\</div>brickbat<span class="x">✕</span></div>
+<div class="bar"><div class="tab"><div class="ic">C:\\</div>BrickBat<span class="x">✕</span></div>
 <div class="plus"><span>+</span><span>⌄</span></div>
 <div class="ctl"><span><svg width="10" height="10"><path d="M0 5.5h10"/></svg></span>
 <span><svg width="10" height="10"><rect x=".5" y=".5" width="9" height="9"/></svg></span>
 <span><svg width="10" height="10"><path d="M0 0l10 10M10 0L0 10"/></svg></span></div></div>
 <pre>
 ${lines.map((l) => l.map((s) => s.c ? `<span class="${s.c}">${esc(s.t)}</span>` : esc(s.t)).join('')).join('\n')}</pre>
+${caption === undefined ? '' : `<div class="cap"><span class="mark"></span><span>${esc(caption)}</span>${key ? `<kbd>${esc(key)}</kbd>` : ''}</div>`}
 </div></div></body></html>`;
 
-(async () => {
+const width = (lines) => Math.max(...lines.map((l) => l.reduce((n, s) => n + [...s.t].length, 0)));
+module.exports = { k, d, h, ok, er, wn, br, P, L, line, CURSOR, PROFILES, ACTIVE, banner, screen, screens, html, width };
+
+if (require.main === module) (async () => {
   fs.mkdirSync(OUT, { recursive: true });
   const browser = await chromium.launch();
   const page = await browser.newPage({ deviceScaleFactor: 2, viewport: { width: 1400, height: 900 } });
   const only = process.argv.slice(3);
   for (const [name, lines] of Object.entries(screens)) {
     if (only.length && !only.includes(name)) continue;
-    const width = Math.max(...lines.map((l) => l.reduce((n, s) => n + [...s.t].length, 0)));
-    await page.setContent(html(lines, Math.max(width + 2, 96)));
+    await page.setContent(html(lines, Math.max(width(lines) + 2, 96)));
     await page.evaluate(() => document.fonts.ready);
     const el = await page.$('.pad');
     await el.screenshot({ path: path.join(OUT, `${name}.png`), omitBackground: true });
