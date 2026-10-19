@@ -1,4 +1,4 @@
-# brickbat guide
+# BrickBat guide
 
 ## Profiles
 
@@ -44,7 +44,7 @@ They're kept on your PC in `%LOCALAPPDATA%\brickbat\favourites.txt`, one scope p
 
 ## Comparing a scope across environments
 
-Press **3** in the Secrets menu, or **E** on a scope. When the scope name contains an environment word, like the `dev` in `analytics.dev.secrets`, brickbat swaps it for each of the others and shows the keys and access it finds in every workspace you're logged in to.
+Press **3** in the Secrets menu, or **E** on a scope. When the scope name contains an environment word, like the `dev` in `analytics.dev.secrets`, BrickBat swaps it for each of the others and shows the keys and access it finds in every workspace you're logged in to.
 
 ![One scope in every environment](screenshots/compare.png)
 
@@ -55,14 +55,14 @@ The word can be set off by dots, underscores or dashes, so `ingest_dev` matches 
 A few settings are at the top of `brickbat.bat`, each with a comment:
 
 - `SYNC_CLI_DEFAULT=1` makes the profile you switch to the CLI default too. Set it to `0` to leave the CLI default alone.
-- `LOOKUP_LIMIT=20` is how short a list must be before brickbat offers to look inside its scopes. At most 50.
+- `LOOKUP_LIMIT=20` is how short a list must be before BrickBat offers to look inside its scopes. At most 50.
 - `ENV_WORDS` lists the environment words used when comparing a scope.
 
 Set the environment variable `NO_COLOR=1` to turn colours off.
 
 ## Good to know
 
-- **Secret values** are never shown or kept by brickbat. A typed value is hidden by the CLI, and brickbat empties the clipboard after it is saved (clipboard history in Win+V keeps its own copy). A value from a file is sent exactly as saved, so brickbat warns first if the file ends with a line break, starts with a byte-order mark or is UTF-16.
+- **Secret values** are never shown or kept by BrickBat. A typed value is hidden by the CLI, and BrickBat empties the clipboard after it is saved (clipboard history in Win+V keeps its own copy). A value from a file is sent exactly as saved, so BrickBat warns first if the file ends with a line break, starts with a byte-order mark or is UTF-16.
 - **The profile decides the workspace.** `DATABRICKS_HOST`, `DATABRICKS_TOKEN` and similar variables set in Windows are ignored, so changes always go to the environment shown. A scope opened from another environment says so at the top.
 - **Check someone's access** finds entries for that exact user, group or service principal, not access they get through a group.
 - **Permissions:** seeing a scope's access needs MANAGE on it, and seeing its keys needs READ.

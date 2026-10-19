@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 rem ============================================================================
-rem  brickbat - a menu for the Databricks CLI in the Windows terminal
+rem  BrickBat - a menu for the Databricks CLI in the Windows terminal
 rem
 rem  * Front page with the login status of every profile
 rem  * Log in, log out, switch or add a profile
@@ -20,7 +20,7 @@ set "BB_VERSION=1.1.0"
 rem ---- settings ----------------------------------------------------------------
 rem  SYNC_CLI_DEFAULT=1 : switching profile here also runs databricks auth switch,
 rem                       so plain databricks commands in every terminal follow it
-rem  SYNC_CLI_DEFAULT=0 : brickbat remembers its own profile, CLI default untouched
+rem  SYNC_CLI_DEFAULT=0 : BrickBat remembers its own profile, CLI default untouched
 set "SYNC_CLI_DEFAULT=1"
 rem  LOOKUP_LIMIT : looking inside scopes - for a key or for someone's access -
 rem                 costs one call per scope, so it is only offered once a list
@@ -34,7 +34,7 @@ rem              other environments, that word is swapped for each of these.
 set "ENV_WORDS=dev test tst qa uat stg stage staging preprod prod prd"
 
 rem ---- the workspace comes from the profile only -------------------------------
-rem  brickbat picks the workspace with -p. The CLI lets DATABRICKS_HOST, DATABRICKS_TOKEN
+rem  BrickBat picks the workspace with -p. The CLI lets DATABRICKS_HOST, DATABRICKS_TOKEN
 rem  and the like set in Windows win over -p, so changes would go to that workspace
 rem  instead of the one shown. They are cleared for this window only.
 set "ENV_AUTH="
@@ -48,7 +48,7 @@ set "ORIG_CP="
 for /f "tokens=2 delims=:." %%c in ('chcp') do set "ORIG_CP=%%c"
 if defined ORIG_CP set "ORIG_CP=!ORIG_CP: =!"
 chcp 65001 >nul
-title brickbat
+title BrickBat
 
 for %%v in (c0 cB1 cB2 cB3 cB4 cB5 cB6 cBrand cHead cDim cKey cOk cErr cWarn) do set "%%v="
 set "ESC="
@@ -303,14 +303,14 @@ echo(
 echo   !cBrand!█ BRICKBAT!c0!  !cDim!·!c0!  !cHead!Terminal for !DBX_PROFILE!!c0!
 echo(
 echo   Every databricks command in here uses profile !cHead!!DBX_PROFILE!!c0!  !cDim!!DBX_HOST!!c0!
-echo   Type !cHead!exit!c0! to go back to brickbat.
+echo   Type !cHead!exit!c0! to go back to BrickBat.
 echo(
 echo   !cDim!Try:  databricks current-user me     databricks clusters list     databricks secrets list-scopes!c0!
 echo(
 set "_oldcp=!DATABRICKS_CONFIG_PROFILE!"
 set "_oldprompt=!PROMPT!"
 set "DATABRICKS_CONFIG_PROFILE=!DBX_PROFILE!"
-if defined c0 (set "PROMPT=$E[38;2;255;54;33m[brickbat:!DBX_PROFILE!]$E[0m $P$G") else (set "PROMPT=[brickbat:!DBX_PROFILE!] $P$G")
+if defined c0 (set "PROMPT=$E[38;2;255;54;33m[BrickBat:!DBX_PROFILE!]$E[0m $P$G") else (set "PROMPT=[BrickBat:!DBX_PROFILE!] $P$G")
 cmd /k
 if defined _oldcp (set "DATABRICKS_CONFIG_PROFILE=!_oldcp!") else (set "DATABRICKS_CONFIG_PROFILE=")
 if defined _oldprompt (set "PROMPT=!_oldprompt!") else (set "PROMPT=")
@@ -326,7 +326,7 @@ call :screen "Info"
 echo(
 set "_cfg=!USERPROFILE!\.databrickscfg"
 if defined DATABRICKS_CONFIG_FILE set "_cfg=!DATABRICKS_CONFIG_FILE!"
-echo   !cDim!brickbat          !c0!v!BB_VERSION!
+echo   !cDim!BrickBat          !c0!v!BB_VERSION!
 echo   !cDim!Databricks CLI    !c0!!CLI_VER!
 echo   !cDim!Profiles file     !c0!!_cfg!
 echo   !cDim!Favourites        !c0!!FAV_FILE!
@@ -350,7 +350,7 @@ goto :main
 echo(
 winget upgrade --id Databricks.DatabricksCLI -e
 echo(
-echo   !cDim!If a new version was installed, close this window and start brickbat again.!c0!
+echo   !cDim!If a new version was installed, close this window and start BrickBat again.!c0!
 echo   !cDim!After a major upgrade you may have to log in once more per profile.!c0!
 call :pause_any
 goto :main
@@ -733,7 +733,7 @@ rem A pipe, not <nul: clip takes NUL for console input and leaves the clipboard 
 type nul | clip >nul 2>&1
 if errorlevel 1 goto :secret_put_done
 echo(
-echo   !cDim!brickbat emptied the clipboard. If clipboard history is on, delete the value in Win+V too.!c0!
+echo   !cDim!BrickBat emptied the clipboard. If clipboard history is on, delete the value in Win+V too.!c0!
 goto :secret_put_done
 
 :secret_put_file
@@ -759,7 +759,7 @@ rem Check the bytes in memory, without showing them. The path reaches PowerShell
 rem the environment, so no part of it is read as code.
 set "_vf="
 for /f %%r in ('powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$b=[IO.File]::ReadAllBytes($env:VFILE);$n=$b.Length;$f='.';if($n -eq 0){$f+='E'};if($n -ge 2 -and $b[0]+$b[1] -eq 509){$f+='U'};if($n -ge 3 -and $b[0] -eq 239 -and $b[1] -eq 187 -and $b[2] -eq 191){$f+='B'};if($n -gt 0 -and $b[$n-1] -eq 10){$f+='N'};$f" 2^>nul') do set "_vf=%%r"
-if not defined _vf echo   !cDim!brickbat could not check this file - make sure it has no line break at the end.!c0!
+if not defined _vf echo   !cDim!BrickBat could not check this file - make sure it has no line break at the end.!c0!
 if defined _vf if not "!_vf!"=="." (
   if not "!_vf:E=!"=="!_vf!" echo   !cWarn!The file is empty.!c0!
   if not "!_vf:U=!"=="!_vf!" echo   !cWarn!The file is UTF-16 - save it as UTF-8 first, or the secret is stored as UTF-16.!c0!
@@ -1107,7 +1107,7 @@ if "!DBX_STATE!"=="IN" (
 ) else (
   echo   !cDim!Status     !c0!!cErr!● Not logged in!c0!  !cDim!no login yet, it expired, or the workspace is unreachable - VPN?!c0!
 )
-if defined ENV_AUTH echo   !cWarn!Note:!c0! !cDim!brickbat ignores!ENV_AUTH! set in Windows and uses the profile shown.!c0!
+if defined ENV_AUTH echo   !cWarn!Note:!c0! !cDim!BrickBat ignores!ENV_AUTH! set in Windows and uses the profile shown.!c0!
 if defined DATABRICKS_CONFIG_PROFILE if not "!DATABRICKS_CONFIG_PROFILE!"=="!DBX_PROFILE!" echo   !cWarn!Note:!c0! !cDim!DATABRICKS_CONFIG_PROFILE=!DATABRICKS_CONFIG_PROFILE! is set in Windows and overrides the default for plain databricks commands.!c0!
 echo(
 echo   !cDim!ENVIRONMENTS!c0!
@@ -1277,7 +1277,7 @@ set "DBX_PROFILE=!PF_NAME_1!"
 exit /b 0
 
 :set_active
-rem %1 = profile name. Remembered by brickbat and, with SYNC_CLI_DEFAULT=1, by the CLI
+rem %1 = profile name. Remembered by BrickBat and, with SYNC_CLI_DEFAULT=1, by the CLI
 set "DBX_PROFILE=%~1"
 (>"%STATE_FILE%" echo(!DBX_PROFILE!) 2>nul
 if not "!SYNC_CLI_DEFAULT!"=="1" exit /b 0
@@ -1977,7 +1977,7 @@ rem 0x8A15002B: no newer version - the CLI is already installed, this window jus
 if "!_rc!"=="-1978335189" set "_rc=0"
 echo(
 if "!_rc!"=="0" (
-  echo   !cOk!Done.!c0! Start brickbat again in a new window so it can find the CLI.
+  echo   !cOk!Done.!c0! Start BrickBat again in a new window so it can find the CLI.
 ) else (
   echo   !cErr!The install did not finish - see the message above.!c0!
 )
@@ -1989,11 +1989,11 @@ cls
 call :banner
 echo(
 echo   !cWarn!This looks like the old Python Databricks CLI: !CLI_VER!!c0!
-echo   brickbat needs the new Databricks CLI. Remove the old one with:
+echo   BrickBat needs the new Databricks CLI. Remove the old one with:
 echo(
 echo       pip uninstall databricks-cli
 echo(
-echo   then start brickbat again - it offers to install the new CLI if it is missing.
+echo   then start BrickBat again - it offers to install the new CLI if it is missing.
 call :pause_any
 goto :quit
 
