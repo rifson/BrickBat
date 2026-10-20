@@ -28,9 +28,9 @@ Filter a list of scopes by name, and open one by its number.
 
 ![Every scope in the workspace](screenshots/scope-list.png)
 
-When a list is down to 20 scopes or fewer, you can look inside them: **V** shows the keys and access of all of them on one screen, **K** finds a key, and **P** checks someone's access. Search every environment you're logged in to and filter, and the list holds the same scope from each environment.
+When a list is down to 20 scopes or fewer, you can look inside them: **V** shows the keys and access of all of them on one screen, **K** finds a key, and **P** checks someone's access. Search every environment you're logged in to and filter by name, and the list comes down to that scope in each environment, plus any other name that matches.
 
-![A search in every environment, filtered to the same scope in each](screenshots/scope-filter.png)
+![A search in every environment, filtered by name](screenshots/scope-filter.png)
 
 A scope shows its keys and who has access. Add, update or delete secrets, grant, change or remove access, or delete the scope. Secret values are never shown. For a multi-line value, like a JSON key, read it from a file.
 

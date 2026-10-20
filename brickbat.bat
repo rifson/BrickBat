@@ -593,6 +593,7 @@ echo(
 echo   !cDim!Checking which of them have !KEY! already - one call per scope.!c0!
 echo(
 for /l %%i in (1,1,!T_N!) do call :list_set_row %%i
+if defined _akv echo   !cDim!Left out - Azure Key Vault scopes get their secrets in the Key Vault:!_akv!!c0!
 echo(
 echo   !cKey![T]!c0! Type or paste a value for each scope - the CLI asks once per scope, hidden
 echo   !cKey![F]!c0! The same value for every scope, read from a file
@@ -693,8 +694,9 @@ if "!MENU_KEY!"=="M" set "PERM=MANAGE"
 if not defined PERM goto :list_show
 call :pick_scopes access
 if errorlevel 1 goto :list_show
-call :screen "Give !PRIN! !PERM! in !T_N! scopes"
+call :screen "Grant !PERM! in !T_N! scopes"
 echo(
+echo   !cDim!Principal  !c0!!cHead!!PRIN!!c0!
 echo   !cDim!Reading the access on each of them - one call per scope, and it needs MANAGE.!c0!
 echo(
 set "T_GO=0"
@@ -710,12 +712,15 @@ call :confirm
 if not defined CONFIRMED goto :list_show
 set "T_OK=0"
 set "T_FAIL="
+set "T_LOST="
 for /l %%i in (1,1,!T_N!) do if defined T_DO_%%i call :list_grant_one %%i
 echo(
 if "!T_OK!"=="!T_GO!" (
   echo   !cOk!!PRIN! now has !PERM! in all !T_GO! scopes.!c0!
 ) else (
-  echo   !cWarn!!PRIN! now has !PERM! in !T_OK! of !T_GO! scopes. Not changed in:!T_FAIL!!c0!
+  echo   !cWarn!!PRIN! now has !PERM! in !T_OK! of !T_GO! scopes.!c0!
+  if defined T_FAIL echo   !cWarn!Not changed in:!T_FAIL!!c0!
+  if defined T_LOST echo   !cErr!Old access removed, but !PERM! not set in:!T_LOST!!c0!
 )
 call :pause_any
 goto :list_show
@@ -742,7 +747,7 @@ set /a T_GO+=1
 if defined _cur (set "_st=!cWarn!!_cur! now, becomes !PERM!!c0!") else set "_st=!cOk!new!c0!"
 call :plan_row %~1
 if "!_cur!"=="MANAGE" if not "!PERM!"=="MANAGE" if "!_mg!"=="1" echo   !cWarn!        The only MANAGE entry there - afterwards only a workspace admin can change its access.!c0!
-if /i "!PRIN!"=="!DBX_USER!" if not "!PERM!"=="MANAGE" echo   !cWarn!        That is you - with !PERM! you can no longer manage access there.!c0!
+if /i "!PRIN!"=="!DBX_USER!" if not "!PERM!"=="MANAGE" echo   !cWarn!        That is your login in !DBX_PROFILE! - with !PERM! you may no longer manage access there.!c0!
 exit /b 0
 
 :list_grant_one
@@ -757,7 +762,7 @@ if "!DBX_RC!"=="0" (
   echo   !cOk!Done.!c0!
 ) else (
   call :show_err
-  set "T_FAIL=!T_FAIL! !SP!:!SCOPE!"
+  if defined ACL_LOST (set "T_LOST=!T_LOST! !SP!:!SCOPE!") else set "T_FAIL=!T_FAIL! !SP!:!SCOPE!"
 )
 exit /b 0
 
@@ -774,8 +779,9 @@ set "_in=!_in:"=!"
 call :trim_var _in
 if not defined _in exit /b 1
 if /i "!_in!"=="A" set "_in=!_vis!"
-rem Only digits, spaces and commas - a for loop would read * and ? as file patterns
-for /f "delims=0123456789 ," %%x in ("!_in!") do (
+rem Only digits, spaces and commas - a for loop would read * and ? as file patterns. The space
+rem must be the last character of the options, and eol is a delimiter so no line is skipped
+for /f "eol=, delims=0123456789, " %%x in ("!_in!") do (
   echo   !cErr!Type numbers from the list, like 3 6 8, or A for all.!c0!
   goto :pick_scopes_ask
 )
@@ -789,8 +795,10 @@ if defined _bad (
   echo   !cErr!Not in the list:!_bad!!c0!
   goto :pick_scopes_ask
 )
-if defined _akv echo   !cDim!Left out - Azure Key Vault scopes get their secrets in the Key Vault:!_akv!!c0!
-if "!T_N!"=="0" goto :pick_scopes_ask
+if "!T_N!"=="0" (
+  if defined _akv echo   !cDim!Left out - Azure Key Vault scopes get their secrets in the Key Vault:!_akv!!c0!
+  goto :pick_scopes_ask
+)
 exit /b 0
 
 :pick_scopes_add
@@ -2113,8 +2121,10 @@ for /l %%i in (1,1,!AC_N!) do (
 exit /b 0
 
 :acl_apply
-rem SCOPE, SP, PRIN, PERM and _cur from :acl_state -> DBX_RC. Replacing an entry means delete,
-rem then put. Never for MANAGE: if the put failed, nobody might be left with MANAGE
+rem SCOPE, SP, PRIN, PERM and _cur from :acl_state -> DBX_RC, and ACL_LOST when the old entry
+rem was removed but the new one not set. Replacing an entry means delete, then put. Never for
+rem MANAGE: if the put failed, nobody might be left with MANAGE
+set "ACL_LOST="
 set "DBX_ARGS=secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!""
 call :dbx_args
 if "!DBX_RC!"=="0" exit /b 0
@@ -2124,7 +2134,7 @@ if "!_cur!"=="MANAGE" (
   echo(
   if /i "!PRIN!"=="!DBX_USER!" (
     echo   !cWarn!You have MANAGE now. Another MANAGE holder or a workspace admin has to change your entry.!c0!
-  ) else echo   !cWarn!!PRIN! has MANAGE now. Remove it with X first, then grant !PERM!.!c0!
+  ) else echo   !cWarn!!PRIN! has MANAGE now. Open the scope and remove that entry with X first, then grant !PERM!.!c0!
   exit /b 0
 )
 set "DBX_ARGS=secrets delete-acl "!SCOPE!" "!PRIN!" -p "!SP!""
@@ -2132,7 +2142,10 @@ call :dbx_args
 if not "!DBX_RC!"=="0" exit /b 0
 set "DBX_ARGS=secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!""
 call :dbx_args
-if not "!DBX_RC!"=="0" echo   !cErr!The old access for !PRIN! was removed, but !PERM! could not be set.!c0!
+if not "!DBX_RC!"=="0" (
+  set "ACL_LOST=1"
+  echo   !cErr!The old access for !PRIN! was removed, but !PERM! could not be set.!c0!
+)
 exit /b 0
 
 :dbx_args

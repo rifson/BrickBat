@@ -147,7 +147,7 @@ screens['scope-list'] = [
 
 const FILTERED = ['analytics-sandbox', 'analytics.dev.legacy', 'analytics.dev.secrets',
   'analytics_exports', 'web-analytics.dev.secrets'];
-// a search in every logged-in environment, filtered down to the same scope in each of them
+// a search in every logged-in environment, filtered by name
 const SEARCH = [
   ['dev', 'analytics-sandbox'], ['dev', 'analytics.dev.legacy'], ['dev', 'analytics.dev.secrets'],
   ['dev', 'analytics_exports'], ['dev', 'web-analytics.dev.secrets'], ['qa', 'analytics.qa.secrets'],
