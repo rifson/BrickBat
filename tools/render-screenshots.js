@@ -147,16 +147,44 @@ screens['scope-list'] = [
 
 const FILTERED = ['analytics-sandbox', 'analytics.dev.legacy', 'analytics.dev.secrets',
   'analytics_exports', 'web-analytics.dev.secrets'];
+// a search in every logged-in environment, filtered down to the same scope in each of them
+const SEARCH = [
+  ['dev', 'analytics-sandbox'], ['dev', 'analytics.dev.legacy'], ['dev', 'analytics.dev.secrets'],
+  ['dev', 'analytics_exports'], ['dev', 'web-analytics.dev.secrets'], ['qa', 'analytics.qa.secrets'],
+  ['qa', 'analytics_exports'], ['azure-sandbox', 'analytics.sandbox.secrets'],
+];
+const searchRow = (i) => line(' ', k(L(String(i), 4)), '  ', P(SEARCH[i - 1][0], 14), ' ', P(SEARCH[i - 1][1], 48), ' ', d('Databricks'));
 screens['scope-filter'] = [
-  ...screen('Scopes in dev'),
+  ...screen('Scopes matching analytics'),
   line(),
-  ...FILTERED.map((n, i) => listRow([1, 2, 3, 4, 212][i], n)),
+  ...[3, 5, 6, 8].map(searchRow),
   line(),
-  line('  ', d('Filter: analytics  -  5 of 214 scopes shown')),
+  line('  ', d('Filter: secrets  -  4 of 8 scopes shown')),
   line(),
   line('  ', k('[O]'), ' Open a scope     ', k('[F]'), ' Filter by name     ', k('[B]'), ' Back'),
-  line('  ', k('[K]'), ' Find a key in these 5 scopes'),
-  line('  ', k('[P]'), " Check someone's access on these 5 scopes"),
+  line('  ', k('[V]'), ' Show the keys and access of these 4 scopes'),
+  line('  ', k('[U]'), ' Add or update a key in some or all of them'),
+  line('  ', k('[G]'), ' Grant or change access in some or all of them'),
+  line('  ', k('[K]'), ' Find a key in these 4 scopes'),
+  line('  ', k('[P]'), " Check someone's access on these 4 scopes"),
+  line(),
+  ...choose(),
+];
+
+// U on that list, for 3 6 8: what changes in each scope, before anything is saved
+const planRow = (i, state) => line(' ', k(L(String(i), 4)), '  ', P(SEARCH[i - 1][0], 14), ' ', P(SEARCH[i - 1][1], 44), ' ', state);
+screens['scope-set'] = [
+  ...screen('Add or update api_key in 3 scopes'),
+  line(),
+  line('  ', d('Checking which of them have api_key already - one call per scope.')),
+  line(),
+  planRow(3, wn('replaces the current value')),
+  planRow(6, wn('replaces the current value')),
+  planRow(8, ok('new key')),
+  line(),
+  line('  ', k('[T]'), ' Type or paste a value for each scope - the CLI asks once per scope, hidden'),
+  line('  ', k('[F]'), ' The same value for every scope, read from a file'),
+  line('  ', k('[B]'), ' Back'),
   line(),
   ...choose(),
 ];

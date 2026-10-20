@@ -12,6 +12,7 @@ A menu for the Databricks CLI in the Windows terminal.
 - Browse, search, create and delete secret scopes
 - Add, update and delete secrets, without ever showing their values
 - Grant, change and remove access to a scope
+- Update one key or one person's access in several scopes at once, like dev, qa and prod
 - Favourite scopes, a key press away
 - Compare one scope across dev, qa and prod
 - Works with AWS, Azure and Google Cloud workspaces
