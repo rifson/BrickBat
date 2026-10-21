@@ -508,12 +508,18 @@ if "!MENU_KEY!"=="F" goto :list_filter
 goto :secrets_menu
 :list_menu_small
 echo   !cKey![O]!c0! Open a scope     !cKey![F]!c0! Filter by name     !cKey![B]!c0! Back
+echo   !cKey![V]!c0! Show the keys and access of these !V_N! scopes
+echo   !cKey![U]!c0! Add or update a key in some or all of them
+echo   !cKey![G]!c0! Grant or change access in some or all of them
 echo   !cKey![K]!c0! Find a key in these !V_N! scopes
 echo   !cKey![P]!c0! Check someone's access on these !V_N! scopes
 echo(
-call :menu OFBKP
+call :menu OFBVUGKP
 if "!MENU_KEY!"=="O" goto :list_open
 if "!MENU_KEY!"=="F" goto :list_filter
+if "!MENU_KEY!"=="V" goto :list_view
+if "!MENU_KEY!"=="U" goto :list_set
+if "!MENU_KEY!"=="G" goto :list_grant
 if "!MENU_KEY!"=="K" goto :lookup_key
 if "!MENU_KEY!"=="P" goto :lookup_access
 goto :secrets_menu
@@ -539,6 +545,282 @@ if defined _in set "_in=!_in:"=!"
 call :trim_var _in
 set "L_FILTER=!_in!"
 goto :list_show
+
+rem ---- the keys and access of every scope shown - two calls each -----------------
+:list_view
+if !V_N! gtr !LOOKUP_LIMIT! goto :list_show
+set "SP_FAV="
+call :screen "Keys and access of !V_N! scopes"
+echo(
+for /f "usebackq delims=" %%n in ("%VISF%") do call :list_view_one %%n
+call :pause_any
+goto :list_show
+
+:list_view_one
+rem %1 = list entry number. Its environment, then its keys and access
+call :list_get %~1
+set "_p=!SP!"
+set "_h="
+call :pf_find "!SP!"
+if defined _pf for %%i in (!_pf!) do set "_h=!PF_HOST_%%i!"
+echo   !cHead!!SP!!c0!  !cDim!!_h!!c0!
+call :compare_show "!SCOPE!"
+exit /b 0
+
+rem ---- one key in the scopes picked - one call each to check, one to save -------
+:list_set
+if !V_N! gtr !LOOKUP_LIMIT! goto :list_show
+echo(
+echo   Adds or updates one key in the scopes you pick, for example the same scope in each environment.
+echo   !cDim!Key names may use letters, digits, - _ and . only.!c0!
+set "KEY="
+set /p "KEY=!c0!   Key (blank = back): "
+if not defined KEY goto :list_show
+set "KEY=!KEY:"=!"
+if not defined KEY goto :list_show
+set "KEY=!KEY: =!"
+if not defined KEY goto :list_show
+call :bad_chars KEY ""
+if not errorlevel 1 (
+  echo   !cErr!Key names may use letters, digits, - _ and . only, and not start with -.!c0!
+  call :pause_any
+  goto :list_show
+)
+call :pick_scopes keys
+if errorlevel 1 goto :list_show
+call :screen "Add or update !KEY! in !T_N! scopes"
+echo(
+echo   !cDim!Checking which of them have !KEY! already - one call per scope.!c0!
+echo(
+for /l %%i in (1,1,!T_N!) do call :list_set_row %%i
+if defined _akv echo   !cDim!Left out - Azure Key Vault scopes get their secrets in the Key Vault:!_akv!!c0!
+echo(
+echo   !cKey![T]!c0! Type or paste a value for each scope - the CLI asks once per scope, hidden
+echo   !cKey![F]!c0! The same value for every scope, read from a file
+echo   !cKey![B]!c0! Back
+echo(
+call :menu TFB
+if "!MENU_KEY!"=="T" goto :list_set_typed
+if "!MENU_KEY!"=="F" goto :list_set_file
+goto :list_show
+:list_set_typed
+set "T_MODE=typed"
+goto :list_set_go
+:list_set_file
+echo(
+call :ask_value_file
+if errorlevel 1 goto :list_show
+set "T_MODE=file"
+:list_set_go
+echo(
+echo   Add or update !cHead!!KEY!!c0! in these !T_N! scopes?
+call :confirm
+if not defined CONFIRMED goto :list_show
+if "!T_MODE!"=="typed" (
+  echo(
+  call :typed_intro
+  echo   !cDim!It asks once for each scope, named just above its prompt.!c0!
+)
+set "T_OK=0"
+set "T_FAIL="
+for /l %%i in (1,1,!T_N!) do call :list_set_one %%i
+echo(
+if "!T_OK!"=="!T_N!" (
+  echo   !cOk!Saved !KEY! in all !T_N! scopes.!c0!
+) else (
+  echo   !cWarn!Saved !KEY! in !T_OK! of !T_N! scopes. Not saved in:!T_FAIL!!c0!
+)
+if "!T_MODE!"=="typed" if not "!T_OK!"=="0" call :clear_clipboard
+call :pause_any
+goto :list_show
+
+:list_set_row
+rem %1 = target number. One call: does that scope have KEY already?
+call :list_get !T_E_%~1!
+call :load_secrets "!SP!" "!SCOPE!"
+if errorlevel 1 (
+  set "_st=!cWarn!could not check: !SE_ERR!!c0!"
+) else (
+  set "_st=!cOk!new key!c0!"
+  for /l %%k in (1,1,!SE_N!) do if /i "!SE_NAME_%%k!"=="!KEY!" set "_st=!cWarn!replaces the current value!c0!"
+)
+call :plan_row %~1
+exit /b 0
+
+:list_set_one
+rem %1 = target number. Saves KEY there - one call
+call :list_get !T_E_%~1!
+echo(
+echo   !cHead!!SP!!c0!  !SCOPE!  !cDim!%~1 of !T_N!!c0!
+if "!T_MODE!"=="file" (
+  set "_rc=0"
+  databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" --log-level error < "!VFILE!" || set "_rc=1"
+) else (
+  call :put_typed
+)
+if "!_rc!"=="0" (
+  set /a T_OK+=1
+  echo   !cOk!Saved.!c0!
+) else (
+  set "T_FAIL=!T_FAIL! !SP!:!SCOPE!"
+  echo   !cErr!Not saved - see the message above.!c0!
+)
+exit /b 0
+
+rem ---- one principal's access in the scopes picked - one call each to read -------
+:list_grant
+if !V_N! gtr !LOOKUP_LIMIT! goto :list_show
+echo(
+echo   Gives one principal the same access in the scopes you pick. A user e-mail, a group name
+echo   or a service principal's application ID.
+echo   !cDim!users means everyone in the workspace. Existing access for the same principal is replaced.!c0!
+set "PRIN="
+set /p "PRIN=!c0!   Principal (blank = back): "
+if not defined PRIN goto :list_show
+set "PRIN=!PRIN:"=!"
+call :trim_var PRIN
+if not defined PRIN goto :list_show
+echo(
+echo   !cKey![R]!c0! READ     read secrets and list the keys
+echo   !cKey![W]!c0! WRITE    READ, plus add, update and delete secrets
+echo   !cKey![M]!c0! MANAGE   WRITE, plus change who has access
+echo   !cKey![B]!c0! Back
+echo(
+call :menu RWMB
+set "PERM="
+if "!MENU_KEY!"=="R" set "PERM=READ"
+if "!MENU_KEY!"=="W" set "PERM=WRITE"
+if "!MENU_KEY!"=="M" set "PERM=MANAGE"
+if not defined PERM goto :list_show
+call :pick_scopes access
+if errorlevel 1 goto :list_show
+call :screen "Grant !PERM! in !T_N! scopes"
+echo(
+echo   !cDim!Principal  !c0!!cHead!!PRIN!!c0!
+echo   !cDim!Reading the access on each of them - one call per scope, and it needs MANAGE.!c0!
+echo(
+set "T_GO=0"
+for /l %%i in (1,1,!T_N!) do call :list_grant_row %%i
+echo(
+if "!T_GO!"=="0" (
+  echo   Nothing to change.
+  call :pause_any
+  goto :list_show
+)
+echo   Give !cHead!!PRIN!!c0! !PERM! in the !T_GO! scopes that change?
+call :confirm
+if not defined CONFIRMED goto :list_show
+set "T_OK=0"
+set "T_FAIL="
+set "T_LOST="
+for /l %%i in (1,1,!T_N!) do if defined T_DO_%%i call :list_grant_one %%i
+echo(
+if "!T_OK!"=="!T_GO!" (
+  echo   !cOk!!PRIN! now has !PERM! in all !T_GO! scopes.!c0!
+) else (
+  echo   !cWarn!!PRIN! now has !PERM! in !T_OK! of !T_GO! scopes.!c0!
+  if defined T_FAIL echo   !cWarn!Not changed in:!T_FAIL!!c0!
+  if defined T_LOST echo   !cErr!Old access removed, but !PERM! not set in:!T_LOST!!c0!
+)
+call :pause_any
+goto :list_show
+
+:list_grant_row
+rem %1 = target number. One call: what PRIN has there now, and whether it changes
+set "T_DO_%~1="
+call :list_get !T_E_%~1!
+call :load_acls "!SP!" "!SCOPE!"
+if errorlevel 1 (
+  set "_st=!cWarn!skipped - its access can't be read: !AC_ERR!!c0!"
+  call :plan_row %~1
+  exit /b 0
+)
+call :acl_state
+set "T_CUR_%~1=!_cur!"
+if /i "!_cur!"=="!PERM!" (
+  set "_st=!cDim!skipped - has !PERM! already!c0!"
+  call :plan_row %~1
+  exit /b 0
+)
+set "T_DO_%~1=1"
+set /a T_GO+=1
+if defined _cur (set "_st=!cWarn!!_cur! now, becomes !PERM!!c0!") else set "_st=!cOk!new!c0!"
+call :plan_row %~1
+if "!_cur!"=="MANAGE" if not "!PERM!"=="MANAGE" if "!_mg!"=="1" echo   !cWarn!        The only MANAGE entry there - afterwards only a workspace admin can change its access.!c0!
+if /i "!PRIN!"=="!DBX_USER!" if not "!PERM!"=="MANAGE" echo   !cWarn!        That is your login in !DBX_PROFILE! - with !PERM! you may no longer manage access there.!c0!
+exit /b 0
+
+:list_grant_one
+rem %1 = target number. Gives PRIN PERM there - one call, three when an entry is replaced
+call :list_get !T_E_%~1!
+set "_cur=!T_CUR_%~1!"
+echo(
+echo   !cHead!!SP!!c0!  !SCOPE!
+call :acl_apply
+if "!DBX_RC!"=="0" (
+  set /a T_OK+=1
+  echo   !cOk!Done.!c0!
+) else (
+  call :show_err
+  if defined ACL_LOST (set "T_LOST=!T_LOST! !SP!:!SCOPE!") else set "T_FAIL=!T_FAIL! !SP!:!SCOPE!"
+)
+exit /b 0
+
+:pick_scopes
+rem %1 = keys leaves out Azure Key Vault scopes, whose secrets live in the Key Vault.
+rem Asks for numbers from the list shown -> T_N and T_E_i, the entry numbers. errorlevel 1 = back
+set "_vis= "
+for /f "usebackq delims=" %%n in ("%VISF%") do set "_vis=!_vis!%%n "
+:pick_scopes_ask
+set "_in="
+set /p "_in=!c0!   Scope numbers from the list, separated by spaces (A = all, blank = back): "
+if not defined _in exit /b 1
+set "_in=!_in:"=!"
+call :trim_var _in
+if not defined _in exit /b 1
+if /i "!_in!"=="A" set "_in=!_vis!"
+rem Only digits, spaces and commas - a for loop would read * and ? as file patterns. The space
+rem must be the last character of the options, and eol is a delimiter so no line is skipped
+for /f "eol=, delims=0123456789, " %%x in ("!_in!") do (
+  echo   !cErr!Type numbers from the list, like 3 6 8, or A for all.!c0!
+  goto :pick_scopes_ask
+)
+set "T_N=0"
+set "_bad="
+set "_akv="
+for %%t in (!_in!) do (
+  if "!_vis: %%t =!"=="!_vis!" (set "_bad=!_bad! %%t") else call :pick_scopes_add %%t %1
+)
+if defined _bad (
+  echo   !cErr!Not in the list:!_bad!!c0!
+  goto :pick_scopes_ask
+)
+if "!T_N!"=="0" (
+  if defined _akv echo   !cDim!Left out - Azure Key Vault scopes get their secrets in the Key Vault:!_akv!!c0!
+  goto :pick_scopes_ask
+)
+exit /b 0
+
+:pick_scopes_add
+rem %1 = list entry number, %2 = keys or access. Adds it to T_E_i once
+for /l %%i in (1,1,!T_N!) do if "!T_E_%%i!"=="%~1" exit /b 0
+if "%~2"=="keys" if /i "!L_TYPE_%~1!"=="AZURE_KEYVAULT" (
+  set "_akv=!_akv! %~1"
+  exit /b 0
+)
+set /a T_N+=1
+set "T_E_!T_N!=%~1"
+exit /b 0
+
+:plan_row
+rem %1 = target number, after list_get. Its list number, environment, scope and _st
+set "_num=    !T_E_%~1!"
+set "_pp=!SP!"
+call :pad _pp 14
+set "_nm=!SCOPE!"
+call :pad _nm 44
+echo  !cKey!!_num:~-4!!c0!  !_pp! !_nm! !_st!
+exit /b 0
 
 rem ---- look inside the scopes shown - one call each, never above the limit -----
 :lookup_key
@@ -706,68 +988,16 @@ goto :scope_page_show
 
 :secret_put_typed
 echo(
-rem Clear stray keys first. This also shows whether the rest of a paste with line breaks
-rem can be dropped afterwards - not where PowerShell is blocked.
-set "_flush=1"
-powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1 || set "_flush="
-echo   !cDim!The CLI asks for the value now. Paste with right-click or Ctrl+V, then press Enter.!c0!
-if defined _flush (
-  echo   !cDim!One line only. For a value with line breaks, use F instead.!c0!
-) else (
-  echo   !cWarn!One line only. A paste with line breaks would leave the rest as keystrokes for the next prompts here - use F for those.!c0!
-)
+call :typed_intro
 echo(
-rem The CLI hides the value only where it may use colours: with NO_COLOR, TERM=dumb or
-rem Git Bash it reads the console in clear instead, so those are cleared for this call.
-rem The log level is pinned too, because debug logging would print the value.
-setlocal
-set "NO_COLOR="
-if /i "!TERM!"=="dumb" set "TERM="
-set "MSYSTEM="
-databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" --log-level error
-endlocal & set "_rc=%errorlevel%"
-rem Drop keys left over from a paste with line breaks, so they can't reach the next prompts
-if defined _flush powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1
-if not "!_rc!"=="0" goto :secret_put_done
-rem A pipe, not <nul: clip takes NUL for console input and leaves the clipboard as it is
-type nul | clip >nul 2>&1
-if errorlevel 1 goto :secret_put_done
-echo(
-echo   !cDim!BrickBat emptied the clipboard. If clipboard history is on, delete the value in Win+V too.!c0!
+call :put_typed
+if "!_rc!"=="0" call :clear_clipboard
 goto :secret_put_done
 
 :secret_put_file
 echo(
-echo   !cDim!The file is sent exactly as saved, so a line break at the end becomes part of the secret.!c0!
-set "VFILE="
-set /p "VFILE=!c0!   Path to the file - you can drag the file into this window: "
-if not defined VFILE goto :scope_page_show
-set "VFILE=!VFILE:"=!"
-call :trim_var VFILE
-if not defined VFILE goto :scope_page_show
-if not exist "!VFILE!" (
-  echo   !cErr!File not found: !VFILE!!c0!
-  call :pause_any
-  goto :scope_page_show
-)
-if exist "!VFILE!\" (
-  echo   !cErr!That is a folder, not a file: !VFILE!!c0!
-  call :pause_any
-  goto :scope_page_show
-)
-rem Check the bytes in memory, without showing them. The path reaches PowerShell through
-rem the environment, so no part of it is read as code.
-set "_vf="
-for /f %%r in ('powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$b=[IO.File]::ReadAllBytes($env:VFILE);$n=$b.Length;$f='.';if($n -eq 0){$f+='E'};if($n -ge 2 -and $b[0]+$b[1] -eq 509){$f+='U'};if($n -ge 3 -and $b[0] -eq 239 -and $b[1] -eq 187 -and $b[2] -eq 191){$f+='B'};if($n -gt 0 -and $b[$n-1] -eq 10){$f+='N'};$f" 2^>nul') do set "_vf=%%r"
-if not defined _vf echo   !cDim!BrickBat could not check this file - make sure it has no line break at the end.!c0!
-if defined _vf if not "!_vf!"=="." (
-  if not "!_vf:E=!"=="!_vf!" echo   !cWarn!The file is empty.!c0!
-  if not "!_vf:U=!"=="!_vf!" echo   !cWarn!The file is UTF-16 - save it as UTF-8 first, or the secret is stored as UTF-16.!c0!
-  if not "!_vf:B=!"=="!_vf!" echo   !cWarn!The file starts with a byte-order mark - it becomes part of the secret.!c0!
-  if not "!_vf:N=!"=="!_vf!" echo   !cWarn!The file ends with a line break - it becomes part of the secret. Fine for JSON or PEM, wrong for a password or token.!c0!
-  call :confirm
-  if not defined CONFIRMED goto :scope_page_show
-)
+call :ask_value_file
+if errorlevel 1 goto :scope_page_show
 rem || also catches a file that can't be opened, where cmd skips the command and keeps ERRORLEVEL
 set "_rc=0"
 databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" --log-level error < "!VFILE!" || set "_rc=1"
@@ -835,13 +1065,7 @@ if "!MENU_KEY!"=="R" set "PERM=READ"
 if "!MENU_KEY!"=="W" set "PERM=WRITE"
 if "!MENU_KEY!"=="M" set "PERM=MANAGE"
 if not defined PERM goto :scope_page_show
-rem What PRIN has now, and how many MANAGE entries the scope has
-set "_cur="
-set "_mg=0"
-for /l %%i in (1,1,!AC_N!) do (
-  if "!AC_PERM_%%i!"=="MANAGE" set /a _mg+=1
-  if /i "!AC_PRIN_%%i!"=="!PRIN!" set "_cur=!AC_PERM_%%i!"
-)
+call :acl_state
 echo(
 if /i "!_cur!"=="!PERM!" (
   echo   !cDim!!PRIN! already has !PERM! - nothing to change.!c0!
@@ -854,26 +1078,7 @@ if /i "!PRIN!"=="!DBX_USER!" if not "!PERM!"=="MANAGE" echo   !cWarn!That is you
 echo   Give !cHead!!PRIN!!c0! !PERM! on !SCOPE! in !SP!?
 call :confirm
 if not defined CONFIRMED goto :scope_page_show
-set "DBX_ARGS=secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!""
-call :dbx_args
-if "!DBX_RC!"=="0" goto :acl_put_done
-findstr /i /c:"ALREADY_EXISTS" /c:"already exists" "%ERRF%" >nul 2>&1
-if errorlevel 1 goto :acl_put_done
-rem Replacing means delete, then put. Not for MANAGE: if the put failed, nobody might be left
-if "!_cur!"=="MANAGE" (
-  echo(
-  if /i "!PRIN!"=="!DBX_USER!" (
-    echo   !cWarn!You have MANAGE now. Another MANAGE holder or a workspace admin has to change your entry.!c0!
-  ) else echo   !cWarn!!PRIN! has MANAGE now. Remove it with X first, then grant !PERM!.!c0!
-  goto :acl_put_done
-)
-set "DBX_ARGS=secrets delete-acl "!SCOPE!" "!PRIN!" -p "!SP!""
-call :dbx_args
-if not "!DBX_RC!"=="0" goto :acl_put_done
-set "DBX_ARGS=secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!""
-call :dbx_args
-if not "!DBX_RC!"=="0" echo   !cErr!The old access for !PRIN! was removed, but !PERM! could not be set.!c0!
-:acl_put_done
+call :acl_apply
 set "MSG=!PRIN! now has !PERM! on !SCOPE!."
 call :report
 goto :scope_page
@@ -1833,6 +2038,115 @@ databricks %* >"%OUTF%" 2>"%ERRF%"
 set "DBX_RC=!errorlevel!"
 if defined _nc (set "NO_COLOR=!_nc!") else (set "NO_COLOR=")
 exit /b !DBX_RC!
+
+:typed_intro
+rem Clears stray keys and says how to paste. _flush = leftover keys from a paste with line
+rem breaks can be dropped after each value - not where PowerShell is blocked
+set "_flush=1"
+powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1 || set "_flush="
+echo   !cDim!The CLI asks for the value now. Paste with right-click or Ctrl+V, then press Enter.!c0!
+if defined _flush (
+  echo   !cDim!One line only. For a value with line breaks, use F instead.!c0!
+) else (
+  echo   !cWarn!One line only. A paste with line breaks would leave the rest as keystrokes for the next prompts here - use F for those.!c0!
+)
+exit /b 0
+
+:put_typed
+rem SCOPE, KEY, SP -> _rc. The CLI asks for the value itself, hidden - BrickBat never sees it.
+rem It hides the value only where it may use colours: with NO_COLOR, TERM=dumb or Git Bash
+rem it reads the console in clear instead, so those are cleared for this call. The log
+rem level is pinned too, because debug logging would print the value.
+setlocal
+set "NO_COLOR="
+if /i "!TERM!"=="dumb" set "TERM="
+set "MSYSTEM="
+databricks secrets put-secret "!SCOPE!" "!KEY!" -p "!SP!" --log-level error
+endlocal & set "_rc=%errorlevel%"
+rem Drop keys left over from a paste with line breaks, so they can't reach the next prompts
+if defined _flush powershell -NoProfile -NonInteractive -Command "$Host.UI.RawUI.FlushInputBuffer()" >nul 2>&1
+exit /b 0
+
+:clear_clipboard
+rem A pipe, not <nul: clip takes NUL for console input and leaves the clipboard as it is
+type nul | clip >nul 2>&1
+if errorlevel 1 exit /b 0
+echo(
+echo   !cDim!BrickBat emptied the clipboard. If clipboard history is on, delete the value in Win+V too.!c0!
+exit /b 0
+
+:ask_value_file
+rem Asks for the file that holds the value and checks it -> VFILE. errorlevel 1 = back
+echo   !cDim!The file is sent exactly as saved, so a line break at the end becomes part of the secret.!c0!
+set "VFILE="
+set /p "VFILE=!c0!   Path to the file - you can drag the file into this window: "
+if not defined VFILE exit /b 1
+set "VFILE=!VFILE:"=!"
+call :trim_var VFILE
+if not defined VFILE exit /b 1
+if not exist "!VFILE!" (
+  echo   !cErr!File not found: !VFILE!!c0!
+  call :pause_any
+  exit /b 1
+)
+if exist "!VFILE!\" (
+  echo   !cErr!That is a folder, not a file: !VFILE!!c0!
+  call :pause_any
+  exit /b 1
+)
+rem Check the bytes in memory, without showing them. The path reaches PowerShell through
+rem the environment, so no part of it is read as code.
+set "_vf="
+for /f %%r in ('powershell -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop';$b=[IO.File]::ReadAllBytes($env:VFILE);$n=$b.Length;$f='.';if($n -eq 0){$f+='E'};if($n -ge 2 -and $b[0]+$b[1] -eq 509){$f+='U'};if($n -ge 3 -and $b[0] -eq 239 -and $b[1] -eq 187 -and $b[2] -eq 191){$f+='B'};if($n -gt 0 -and $b[$n-1] -eq 10){$f+='N'};$f" 2^>nul') do set "_vf=%%r"
+if not defined _vf echo   !cDim!BrickBat could not check this file - make sure it has no line break at the end.!c0!
+if defined _vf if not "!_vf!"=="." (
+  if not "!_vf:E=!"=="!_vf!" echo   !cWarn!The file is empty.!c0!
+  if not "!_vf:U=!"=="!_vf!" echo   !cWarn!The file is UTF-16 - save it as UTF-8 first, or the secret is stored as UTF-16.!c0!
+  if not "!_vf:B=!"=="!_vf!" echo   !cWarn!The file starts with a byte-order mark - it becomes part of the secret.!c0!
+  if not "!_vf:N=!"=="!_vf!" echo   !cWarn!The file ends with a line break - it becomes part of the secret. Fine for JSON or PEM, wrong for a password or token.!c0!
+  call :confirm
+  if not defined CONFIRMED exit /b 1
+)
+exit /b 0
+
+:acl_state
+rem AC_* of a scope and PRIN -> _cur = PRIN's permission there (empty if none), _mg = how
+rem many MANAGE entries the scope has
+set "_cur="
+set "_mg=0"
+for /l %%i in (1,1,!AC_N!) do (
+  if "!AC_PERM_%%i!"=="MANAGE" set /a _mg+=1
+  if /i "!AC_PRIN_%%i!"=="!PRIN!" set "_cur=!AC_PERM_%%i!"
+)
+exit /b 0
+
+:acl_apply
+rem SCOPE, SP, PRIN, PERM and _cur from :acl_state -> DBX_RC, and ACL_LOST when the old entry
+rem was removed but the new one not set. Replacing an entry means delete, then put. Never for
+rem MANAGE: if the put failed, nobody might be left with MANAGE
+set "ACL_LOST="
+set "DBX_ARGS=secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!""
+call :dbx_args
+if "!DBX_RC!"=="0" exit /b 0
+findstr /i /c:"ALREADY_EXISTS" /c:"already exists" "%ERRF%" >nul 2>&1
+if errorlevel 1 exit /b 0
+if "!_cur!"=="MANAGE" (
+  echo(
+  if /i "!PRIN!"=="!DBX_USER!" (
+    echo   !cWarn!You have MANAGE now. Another MANAGE holder or a workspace admin has to change your entry.!c0!
+  ) else echo   !cWarn!!PRIN! has MANAGE now. Open the scope and remove that entry with X first, then grant !PERM!.!c0!
+  exit /b 0
+)
+set "DBX_ARGS=secrets delete-acl "!SCOPE!" "!PRIN!" -p "!SP!""
+call :dbx_args
+if not "!DBX_RC!"=="0" exit /b 0
+set "DBX_ARGS=secrets put-acl "!SCOPE!" "!PRIN!" !PERM! -p "!SP!""
+call :dbx_args
+if not "!DBX_RC!"=="0" (
+  set "ACL_LOST=1"
+  echo   !cErr!The old access for !PRIN! was removed, but !PERM! could not be set.!c0!
+)
+exit /b 0
 
 :dbx_args
 rem Like :dbx, with the arguments in DBX_ARGS. They are expanded once and never parsed

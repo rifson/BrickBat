@@ -28,13 +28,21 @@ Filter a list of scopes by name, and open one by its number.
 
 ![Every scope in the workspace](screenshots/scope-list.png)
 
-When a list is down to 20 scopes or fewer, you can also look inside them for a key, or for someone's access.
+When a list is down to 20 scopes or fewer, you can look inside them: **V** shows the keys and access of all of them on one screen, **K** finds a key, and **P** checks someone's access. Search every environment you're logged in to and filter by name, and the list comes down to that scope in each environment, plus any other name that matches.
 
-![A filtered list](screenshots/scope-filter.png)
+![A search in every environment, filtered by name](screenshots/scope-filter.png)
 
 A scope shows its keys and who has access. Add, update or delete secrets, grant, change or remove access, or delete the scope. Secret values are never shown. For a multi-line value, like a JSON key, read it from a file.
 
 ![One scope](screenshots/scope.png)
+
+## Several scopes at once
+
+From a list of 20 scopes or fewer, **U** adds or updates one key in the scopes you pick, and **G** gives one user, group or service principal the same access in them. Pick them by their numbers in the list, or **A** for all. BrickBat first shows what changes in each scope, and changes nothing until you confirm.
+
+![Adding a key in three environments](screenshots/scope-set.png)
+
+When you type the value, the CLI asks once per scope, with the environment named above its prompt, so each environment can get its own value. To give every scope the same value, read it from a file.
 
 ## Favourites
 
