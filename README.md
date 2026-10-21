@@ -2,7 +2,7 @@
 
 A menu for the Databricks CLI in the Windows terminal.
 
-![BrickBat demo: the front page, opening a favourite secret scope, and the same scope in dev, qa and prod](docs/screenshots/demo.gif)
+![BrickBat demo: searching every environment for a scope, then adding or updating one key in dev, qa and the sandbox at once](docs/screenshots/demo.gif)
 
 ## Features
 

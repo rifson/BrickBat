@@ -315,7 +315,7 @@ html,body{margin:0;background:transparent}
 pre{margin:0;padding:10px 14px 18px;font:15px/18px Cascadia,"DejaVu Sans Mono",monospace;color:#cccccc;
   width:${cols}ch;${rows ? `height:${rows * 18}px;` : ''}white-space:pre;-webkit-font-smoothing:antialiased}
 .key{color:#61d6d6}.dim{color:#767676}.head{color:#f2f2f2;font-weight:700}.ok{color:#16c60c}
-.err{color:#e74856}.warn{color:#f9f1a5}.brand{color:#ff3621}
+.err{color:#e74856}.warn{color:#f9f1a5}.brand{color:#ff3621}.pq{color:#3b78ff;font-weight:700}
 .b1{color:#ff8058}.b2{color:#ff6844}.b3{color:#ff5032}.b4{color:#ff3621}.b5{color:#de2c1c}.b6{color:#962418}
 .cursor{display:inline-block;width:2px;height:16px;background:#cccccc;vertical-align:-3px}
 .cursor.off{visibility:hidden}
@@ -332,7 +332,8 @@ ${caption === undefined ? '' : `<div class="cap"><span class="mark"></span><span
 </div></div></body></html>`;
 
 const width = (lines) => Math.max(...lines.map((l) => l.reduce((n, s) => n + [...s.t].length, 0)));
-module.exports = { k, d, h, ok, er, wn, br, P, L, line, CURSOR, PROFILES, ACTIVE, banner, screen, screens, html, width };
+module.exports = { k, d, h, ok, er, wn, br, P, L, line, CURSOR, PROFILES, ACTIVE, banner, screen, screens, html, width,
+  SEARCH, searchRow };
 
 if (require.main === module) (async () => {
   fs.mkdirSync(OUT, { recursive: true });
